@@ -289,6 +289,24 @@ export async function routeTrigger(
         text: typeof event.payload.text === 'string' ? event.payload.text : null,
       },
     })
+
+    // Recovery guard: if a previous run was left "running" (for example process restart
+    // after insert and before execution), close stale rows before starting a new one.
+    const staleCutoffIso = new Date(Date.now() - 10 * 60_000).toISOString()
+    await admin
+      .from('automation_runs')
+      .update({
+        status: 'failed',
+        error: 'Run marked stale and superseded by a new trigger execution.',
+        completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('automation_id', automation.id)
+      .eq('trigger_type', event.type)
+      .eq('status', 'running')
+      .eq('contact_id', event.contactId ?? null)
+      .lt('updated_at', staleCutoffIso)
+
     const { data: run, error: runError } = await admin
       .from('automation_runs')
       .insert({

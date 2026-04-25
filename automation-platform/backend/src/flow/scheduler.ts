@@ -21,12 +21,16 @@ function readPath(source: Record<string, unknown>, path: string): unknown {
   return current
 }
 
-function isDue(value: unknown, now: Date, offsetMinutes: number): boolean {
-  if (typeof value !== 'string' || !value) return false
+function dueBucket(value: unknown, now: Date, offsetMinutes: number): string | null {
+  if (typeof value !== 'string' || !value) return null
   const timestamp = Date.parse(value)
-  if (Number.isNaN(timestamp)) return false
+  if (Number.isNaN(timestamp)) return null
   const target = timestamp - offsetMinutes * 60_000
-  return target <= now.getTime() && target > now.getTime() - TICK_MS * 2
+  const nowMs = now.getTime()
+  if (!(target <= nowMs && target > nowMs - TICK_MS * 2)) return null
+  // Stable minute bucket based on scheduled target time, not "now".
+  // Prevents duplicate runs every scheduler tick for the same due datetime.
+  return new Date(target).toISOString().slice(0, 16)
 }
 
 function readOffsetMinutes(config: Record<string, unknown>): number {
@@ -64,9 +68,10 @@ async function processAutomation(admin: SupabaseClient, automation: Record<strin
   for (const contact of contacts ?? []) {
     const metadata = asObject(contact.metadata)
     const value = readPath({ ...metadata, custom_attributes: metadata.custom_attributes }, attributePath)
-    if (!isDue(value, now, offsetMinutes)) continue
+    const bucket = dueBucket(value, now, offsetMinutes)
+    if (!bucket) continue
 
-    const lockKey = `${attributePath}:${String(value)}:${now.toISOString().slice(0, 16)}`
+    const lockKey = `${attributePath}:${String(value)}:${bucket}`
     const { error: lockError } = await admin.from('scheduled_trigger_locks').insert({
       workspace_id: workspaceId,
       automation_id: automation.id,
