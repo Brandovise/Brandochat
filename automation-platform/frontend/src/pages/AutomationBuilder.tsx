@@ -19,6 +19,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { supabase } from '../lib/supabase'
+import { useTheme } from '../context/ThemeContext'
 import { Button } from '../shared/ui/button'
 import { FormError } from '../shared/ui/form-error'
 import { FormField } from '../shared/ui/form-field'
@@ -507,6 +508,7 @@ export default function AutomationBuilder() {
   const [conditionVariables, setConditionVariables] = useState<VariableOption[]>(BASE_VARIABLE_OPTIONS)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const { theme } = useTheme()
 
   const selected = useMemo(() => nodes.find((node) => node.id === selectedId) ?? nodes[0], [nodes, selectedId])
 
@@ -646,11 +648,11 @@ export default function AutomationBuilder() {
   if (!workspaceId) return <p className="text-slate-500">Missing workspace.</p>
 
   return (
-    <div className="flex h-screen flex-col bg-slate-950">
-      <div className="flex flex-col gap-3 border-b border-slate-800 bg-slate-950 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex h-screen flex-col bg-slate-50 dark:bg-slate-950">
+      <div className="flex flex-col gap-3 border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-950 sm:flex-row sm:items-center sm:justify-between">
         <PageHeader title="Automation builder" description="Build text-message workflows powered by AI skills and reply routing." />
         <div className="flex gap-2">
-          <Link to={`/w/${workspaceId}/automations`} className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300">
+          <Link to={`/w/${workspaceId}/automations`} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 dark:border-slate-700 dark:text-slate-300">
             Back
           </Link>
           <Button type="button" disabled={saving} onClick={() => void save()}>
@@ -661,7 +663,7 @@ export default function AutomationBuilder() {
       <FormError message={error} />
 
       <section className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[280px_1fr_360px]">
-        <aside className="min-h-0 space-y-3 overflow-y-auto border-r border-slate-800 bg-slate-900/80 p-4">
+        <aside className="min-h-0 space-y-3 overflow-y-auto border-b border-slate-200 bg-slate-100/80 p-4 dark:border-r dark:border-b-0 dark:border-slate-800 dark:bg-slate-900/80">
           <h2 className="text-sm font-semibold text-white">Node palette</h2>
           {PALETTE_GROUPS.map((group) => (
             <div key={group.title} className="space-y-2 border-t border-slate-800 pt-3 first:border-t-0 first:pt-0">
@@ -675,7 +677,7 @@ export default function AutomationBuilder() {
                   draggable
                   onDragStart={(event) => event.dataTransfer.setData('node/type', item.type)}
                   onClick={() => addNode(item.type)}
-                  className="block w-full rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-left text-sm text-slate-300 hover:border-emerald-500/60"
+                  className="block w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-left text-sm text-slate-700 hover:border-emerald-500/60 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300"
                 >
                   {item.label}
                 </button>
@@ -684,8 +686,8 @@ export default function AutomationBuilder() {
           ))}
         </aside>
 
-        <main className="relative min-h-0 overflow-hidden bg-slate-100 text-slate-950">
-          <div className="absolute left-4 right-4 top-4 z-20 flex flex-col gap-3 rounded-2xl border border-white/80 bg-white/90 p-3 shadow-sm backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+        <main className="relative min-h-0 overflow-hidden bg-slate-100 text-slate-950 dark:bg-slate-950 dark:text-slate-100">
+          <div className="absolute left-4 right-4 top-4 z-20 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white/90 p-3 shadow-sm backdrop-blur dark:border-slate-700 dark:bg-slate-900/85 sm:flex-row sm:items-center sm:justify-between">
             <FormField label="Automation name">
               <TextInput value={name} onChange={(event) => setName(event.target.value)} className="border-slate-200 bg-white text-slate-950" />
             </FormField>
@@ -713,11 +715,12 @@ export default function AutomationBuilder() {
               triggerType={triggerType}
               triggerConfig={triggerConfig}
               entry={entry}
+              theme={theme}
             />
           </ReactFlowProvider>
         </main>
 
-        <aside className="min-h-0 space-y-4 overflow-y-auto border-l border-slate-800 bg-slate-900/80 p-4">
+        <aside className="min-h-0 space-y-4 overflow-y-auto border-t border-slate-200 bg-slate-100/80 p-4 dark:border-l dark:border-t-0 dark:border-slate-800 dark:bg-slate-900/80">
           <h2 className="text-sm font-semibold text-white">Properties</h2>
           <FormField label="Trigger">
             <select value={triggerType} onChange={(event) => setTriggerType(event.target.value as TriggerType)} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white">
@@ -786,6 +789,7 @@ function WorkflowCanvas({
   triggerType,
   triggerConfig,
   entry,
+  theme,
 }: {
   nodes: BuilderNode[]
   setNodes: Dispatch<SetStateAction<BuilderNode[]>>
@@ -797,6 +801,7 @@ function WorkflowCanvas({
   triggerType: TriggerType
   triggerConfig: Record<string, unknown>
   entry: string
+  theme: 'light' | 'dark'
 }) {
   const { screenToFlowPosition, fitView } = useReactFlow()
   const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<BuilderFlowNode>([])
@@ -859,10 +864,10 @@ function WorkflowCanvas({
         }}
         onNodeClick={(_, node) => setSelectedId(node.id)}
         fitView
-        className="bg-slate-100"
+        className={theme === 'dark' ? 'bg-slate-900' : 'bg-slate-100'}
         defaultEdgeOptions={{ type: 'smoothstep' }}
       >
-        <Background color="#cbd5e1" gap={24} size={1.2} />
+        <Background color={theme === 'dark' ? '#334155' : '#cbd5e1'} gap={24} size={1.2} />
         <Controls position="bottom-center" />
         <MiniMap
           position="bottom-left"
@@ -876,10 +881,10 @@ function WorkflowCanvas({
             return '#bae6fd'
           }}
         />
-        <div className="absolute right-4 top-24 z-10 rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 text-sm shadow">
-          <p className="font-semibold text-slate-950">Trigger</p>
-          <p className="text-xs text-slate-500">{triggerLabel(triggerType)}</p>
-          <button type="button" className="mt-3 text-xs font-medium text-emerald-600" onClick={() => fitView({ padding: 0.2 })}>
+        <div className="absolute right-4 top-24 z-10 rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 text-sm shadow dark:border-slate-700 dark:bg-slate-900/95">
+          <p className="font-semibold text-slate-950 dark:text-white">Trigger</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">{triggerLabel(triggerType)}</p>
+          <button type="button" className="mt-3 text-xs font-medium text-emerald-600 dark:text-emerald-400" onClick={() => fitView({ padding: 0.2 })}>
             Fit view
           </button>
         </div>

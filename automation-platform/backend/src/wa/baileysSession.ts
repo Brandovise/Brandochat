@@ -476,7 +476,18 @@ export async function ensureWorkspaceSocket(workspaceId: string, instanceId: str
     getMessage: async () => undefined,
   })
 
-  const entry = sessions.get(instanceId)!
+  let entry = sessions.get(instanceId)
+  if (!entry) {
+    entry = {
+      workspaceId,
+      instanceId,
+      sock: null,
+      pairing_status: 'disconnected',
+      starting: false,
+      sync: emptySyncSnapshot(),
+    }
+    sessions.set(instanceId, entry)
+  }
   entry.sock = sock
   entry.starting = false
 

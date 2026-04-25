@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useTheme } from '../context/ThemeContext'
 import { supabase } from '../lib/supabase'
 
 const navCls = ({ isActive }: { isActive: boolean }) =>
@@ -27,6 +28,7 @@ function initials(name: string): string {
 
 export function AppShell() {
   const { user } = useAuth()
+  const { theme, toggleTheme } = useTheme()
   const { workspaceId } = useParams()
   const location = useLocation()
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
@@ -41,8 +43,8 @@ export function AppShell() {
   }, [])
 
   return (
-    <div className="flex min-h-screen bg-slate-950 text-slate-100">
-      <aside className={`hidden w-[76px] shrink-0 border-r border-slate-800 bg-slate-950 p-3 lg:flex-col ${isBuilder ? 'lg:hidden' : 'lg:flex'}`}>
+    <div className="flex min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+      <aside className={`hidden w-[76px] shrink-0 border-r border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-950 lg:flex-col ${isBuilder ? 'lg:hidden' : 'lg:flex'}`}>
         <Link
           to="/workspaces"
           title="All workspaces"
@@ -62,7 +64,7 @@ export function AppShell() {
                 className={`group relative flex h-12 w-12 items-center justify-center rounded-2xl text-sm font-semibold transition ${
                   active
                     ? 'bg-emerald-500 text-white'
-                    : 'bg-slate-800 text-slate-300 hover:rounded-xl hover:bg-slate-700 hover:text-white'
+                    : 'bg-slate-200 text-slate-700 hover:rounded-xl hover:bg-slate-300 hover:text-slate-900 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-white'
                 }`}
               >
                 {active ? <span className="absolute -left-3 h-8 w-1 rounded-r bg-emerald-300" /> : null}
@@ -73,7 +75,7 @@ export function AppShell() {
           <Link
             to="/workspaces"
             title="Create or choose workspace"
-            className="flex h-12 w-12 items-center justify-center rounded-2xl border border-dashed border-slate-700 text-xl text-slate-400 hover:border-emerald-500/60 hover:text-emerald-300"
+            className="flex h-12 w-12 items-center justify-center rounded-2xl border border-dashed border-slate-300 text-xl text-slate-500 hover:border-emerald-500/60 hover:text-emerald-300 dark:border-slate-700 dark:text-slate-400"
           >
             +
           </Link>
@@ -81,22 +83,29 @@ export function AppShell() {
 
         <div className="mt-4 flex flex-col items-center gap-2">
           <button
+            title="Toggle theme"
+            onClick={toggleTheme}
+            className="flex h-10 w-10 items-center justify-center rounded-xl text-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
+          >
+            {theme === 'dark' ? '☀️' : '🌙'}
+          </button>
+          <button
             title="Notifications"
-            className="flex h-10 w-10 items-center justify-center rounded-xl text-lg text-slate-400 hover:bg-slate-800 hover:text-white"
+            className="flex h-10 w-10 items-center justify-center rounded-xl text-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
           >
             🔔
           </button>
           <Link
             title="Settings"
             to="/account/settings"
-            className="flex h-10 w-10 items-center justify-center rounded-xl text-lg text-slate-400 hover:bg-slate-800 hover:text-white"
+            className="flex h-10 w-10 items-center justify-center rounded-xl text-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
           >
             ⚙️
           </Link>
           <Link
             title={user?.email}
             to="/account/settings"
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-800 text-xs font-semibold text-slate-300 hover:text-white"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-700 hover:text-slate-900 dark:bg-slate-800 dark:text-slate-300 dark:hover:text-white"
           >
             {user?.email?.slice(0, 2).toUpperCase() ?? 'ME'}
           </Link>
@@ -112,9 +121,11 @@ export function AppShell() {
 export function WorkspaceShell() {
   const { workspaceId } = useParams()
   const location = useLocation()
+  const { theme, toggleTheme } = useTheme()
   const base = `/w/${workspaceId}`
   const [stats, setStats] = useState({ connected: 0, unread: 0, assigned: 0 })
   const [workspaceName, setWorkspaceName] = useState('Current workspace')
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [contactLists, setContactLists] = useState<ContactListLite[]>([])
   const [contactTags, setContactTags] = useState<ContactTagLite[]>([])
 
@@ -183,7 +194,27 @@ export function WorkspaceShell() {
 
   return (
     <div className="grid min-h-[calc(100vh-3rem)] grid-cols-1 gap-4 lg:grid-cols-[240px_1fr]">
-      <aside className="rounded-2xl border border-slate-800 bg-slate-900/70 p-3 shadow-xl shadow-slate-950/20">
+      <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900/70 lg:hidden">
+        <p className="truncate font-medium">{workspaceName}</p>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="rounded-lg border border-slate-300 px-2 py-1 text-sm dark:border-slate-700"
+            title="Toggle theme"
+          >
+            {theme === 'dark' ? '☀️' : '🌙'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileNavOpen((value) => !value)}
+            className="rounded-lg border border-slate-300 px-3 py-1 text-sm dark:border-slate-700"
+          >
+            {mobileNavOpen ? 'Close menu' : 'Open menu'}
+          </button>
+        </div>
+      </div>
+      <aside className={`rounded-2xl border border-slate-200 bg-white/90 p-3 shadow-xl shadow-slate-200/30 dark:border-slate-800 dark:bg-slate-900/70 dark:shadow-slate-950/20 ${mobileNavOpen ? 'block' : 'hidden'} lg:block`}>
         <div className="mb-4 rounded-xl bg-slate-950/60 p-3">
           <p className="text-xs uppercase tracking-wide text-slate-500">Workspace</p>
           <p className="mt-1 truncate text-sm font-semibold text-white">{workspaceName}</p>
