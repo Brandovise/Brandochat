@@ -38,6 +38,18 @@ type RequestOptions = {
   body?: Record<string, unknown>
 }
 
+export class CalendlyApiError extends Error {
+  status: number
+  payload: unknown
+
+  constructor(status: number, message: string, payload: unknown) {
+    super(message)
+    this.name = 'CalendlyApiError'
+    this.status = status
+    this.payload = payload
+  }
+}
+
 function toErrorText(data: unknown, fallback: string): string {
   if (data && typeof data === 'object' && !Array.isArray(data)) {
     const title = (data as Record<string, unknown>).title
@@ -66,7 +78,7 @@ async function calendlyRequest<T>(token: string, path: string, options: RequestO
       data = null
     }
     const message = toErrorText(data, `Calendly API error ${response.status}`)
-    throw new Error(message)
+    throw new CalendlyApiError(response.status, message, data)
   }
   return (await response.json()) as T
 }

@@ -1,6 +1,14 @@
 import { Router } from 'express'
 import { asyncHandler } from '../http/async-handler.js'
-import { createCalendlyWebhookSubscription, getCalendlyCurrentUser, listCalendlyWebhookSubscriptions, type CalendlyEventType, type CalendlyScope } from '../integration/calendly/client.js'
+import {
+  CalendlyApiError,
+  createCalendlyWebhookSubscription,
+  getCalendlyCurrentUser,
+  listCalendlyWebhookSubscriptions,
+  type CalendlyEventType,
+  type CalendlyScope,
+  type CalendlyWebhookResource,
+} from '../integration/calendly/client.js'
 import { getServiceRoleClient } from '../lib/supabase-clients.js'
 import { requireWorkspaceMember } from '../middleware/workspace-auth.middleware.js'
 import type { AuthenticatedWorkspaceRequest } from '../types/express.js'
@@ -175,15 +183,43 @@ export function createCalendlyRouter(): Router {
         return
       }
 
-      const resource = await createCalendlyWebhookSubscription(token, {
-        url: callbackUrl,
-        events,
-        scope,
-        organization,
-        user: body.user?.trim() || undefined,
-        group: body.group?.trim() || undefined,
-        signing_key: body.signingKey?.trim() || undefined,
-      })
+      const userUri = body.user?.trim() || undefined
+      const groupUri = body.group?.trim() || undefined
+
+      let resource: CalendlyWebhookResource
+      let duplicate = false
+      try {
+        resource = await createCalendlyWebhookSubscription(token, {
+          url: callbackUrl,
+          events,
+          scope,
+          organization,
+          user: userUri,
+          group: groupUri,
+          signing_key: body.signingKey?.trim() || undefined,
+        })
+      } catch (error) {
+        const isDuplicate =
+          error instanceof CalendlyApiError &&
+          error.status === 409 &&
+          error.message.toLowerCase().includes('hook with this url already exists')
+        if (!isDuplicate) throw error
+
+        const remote = await listCalendlyWebhookSubscriptions(token, organization)
+        const matched = remote.find((item) => {
+          if (item.callback_url !== callbackUrl) return false
+          if (item.scope !== scope) return false
+          if (scope === 'user' && item.user !== (userUri ?? null)) return false
+          if (scope === 'group' && item.group !== (groupUri ?? null)) return false
+          return true
+        })
+        if (!matched) {
+          res.status(409).json({ error: 'Calendly already has a webhook for this callback URL. Use a different URL/scope or delete the existing one in Calendly.' })
+          return
+        }
+        resource = matched
+        duplicate = true
+      }
 
       const { data: webhookRow, error: webhookErr } = await admin
         .from('workspace_calendly_webhooks')
@@ -213,9 +249,11 @@ export function createCalendlyRouter(): Router {
       await addIntegrationLog({
         workspaceId,
         integrationId: integration.id as string,
-        level: 'info',
-        action: 'calendly_webhook_created',
-        message: `Created Calendly webhook for ${resource.scope} scope.`,
+        level: duplicate ? 'warn' : 'info',
+        action: duplicate ? 'calendly_webhook_existing' : 'calendly_webhook_created',
+        message: duplicate
+          ? `Using existing Calendly webhook for ${resource.scope} scope and callback URL.`
+          : `Created Calendly webhook for ${resource.scope} scope.`,
         context: {
           webhookUri: resource.uri,
           events: resource.events,
@@ -223,7 +261,7 @@ export function createCalendlyRouter(): Router {
         },
       })
 
-      res.json({ webhook: webhookRow })
+      res.json({ webhook: webhookRow, duplicate })
     }),
   )
 

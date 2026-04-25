@@ -32,6 +32,7 @@ type CalendlyEventRow = {
   processing_status: string
   created_at: string
   error: string | null
+  payload: unknown
 }
 
 type IntegrationCard = {
@@ -107,9 +108,23 @@ export default function IntegrationsPage() {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
 
+  function toPrettyJson(value: unknown): string {
+    try {
+      return JSON.stringify(value ?? {}, null, 2)
+    } catch {
+      return '{}'
+    }
+  }
+
   function toUserError(message: string): string {
     if (message.includes("Could not find the table 'public.workspace_integrations'")) {
       return "Database is missing 'workspace_integrations'. Run Supabase migrations first (e.g. `supabase db push`) and refresh."
+    }
+    if (message.includes('Hook with this url already exists')) {
+      return 'This Calendly callback URL already has a webhook. Click Refresh to load it, or use a different scope/URL.'
+    }
+    if (message.includes('Cannot reach backend API')) {
+      return 'Cannot reach backend API. Verify EasyPanel domain routing and ensure /api goes to the backend service.'
     }
     return message
   }
@@ -133,7 +148,7 @@ export default function IntegrationsPage() {
     if (!workspaceId) return
     const { data, error: loadErr } = await supabase
       .from('calendly_webhook_events')
-      .select('id, event, signature_valid, processing_status, created_at, error')
+      .select('id, event, signature_valid, processing_status, created_at, error, payload')
       .eq('workspace_id', workspaceId)
       .order('created_at', { ascending: false })
       .limit(30)
@@ -214,7 +229,7 @@ export default function IntegrationsPage() {
     if (calendlySelectedEvents.length === 0) return setError('Select at least one event.')
     setCreatingWebhook(true)
     try {
-      await calendlyCreateWebhook(workspaceId, {
+      const result = await calendlyCreateWebhook(workspaceId, {
         callbackUrl: calendlyCallbackUrl,
         scope: calendlyScope,
         events: calendlySelectedEvents,
@@ -223,7 +238,7 @@ export default function IntegrationsPage() {
         group: calendlyScope === 'group' ? calendlyGroupUri || undefined : undefined,
         signingKey: calendlySigningKey || undefined,
       })
-      setNotice('Calendly webhook subscription created.')
+      setNotice(result.duplicate ? 'Webhook already existed in Calendly; linked existing subscription.' : 'Calendly webhook subscription created.')
       await refreshCalendlyWebhooks()
       await loadLogs()
     } catch (err) {
@@ -365,6 +380,10 @@ export default function IntegrationsPage() {
                   <p className="mt-1 text-sm text-white">{row.event}</p>
                   <p className="text-xs text-slate-500">{new Date(row.created_at).toLocaleString()}</p>
                   {row.error ? <p className="text-xs text-rose-300">{row.error}</p> : null}
+                  <details className="mt-2 rounded-lg border border-slate-800 bg-slate-950/80 p-2">
+                    <summary className="cursor-pointer text-xs text-slate-300">Payload JSON</summary>
+                    <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all text-[11px] text-slate-300">{toPrettyJson(row.payload)}</pre>
+                  </details>
                 </article>
               ))}
               {logs.filter((log) => log.provider === 'calendly').map((log) => (

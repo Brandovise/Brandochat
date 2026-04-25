@@ -37,10 +37,19 @@ async function readApiError(res: Response): Promise<string> {
 
 async function fetchWithAuth(input: string, init: RequestInit = {}, retry = true): Promise<Response> {
   const h = await authHeader(!retry)
-  const res = await fetch(input, {
-    ...init,
-    headers: { ...h, ...(init.headers ?? {}) },
-  })
+  let res: Response
+  try {
+    res = await fetch(input, {
+      ...init,
+      headers: { ...h, ...(init.headers ?? {}) },
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to fetch'
+    if (message.includes('Failed to fetch')) {
+      throw new Error('Cannot reach backend API. Check EasyPanel domain routing and /api proxy configuration.')
+    }
+    throw error
+  }
 
   if (res.status === 401 && retry) {
     return fetchWithAuth(input, init, false)
@@ -256,6 +265,7 @@ export async function calendlyCreateWebhook(
       created_at: string
       updated_at: string
     }
+    duplicate?: boolean
   }>
 }
 
