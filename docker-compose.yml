@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
     container_name: BrandoChat-backend
     env_file:
-      - ./automation-platform/backend/.env
+      - ./.env
     environment:
       PORT: 3847
       WA_AUTH_ROOT: /app/data/wa_sessions
