@@ -29,6 +29,8 @@ const msgRetryCounterCache = new NodeCache() as CacheStore
 const RECONNECT_DELAY_MS = 1_500
 const SYNC_CONNECT_TIMEOUT_MS = 20_000
 const SEND_CONNECT_TIMEOUT_MS = 20_000
+const SEND_WAIT_FOR_CONNECT_MS = 30_000
+const WATCHDOG_INTERVAL_MS = 15_000
 
 type PairingStatus = 'disconnected' | 'qr' | 'connected' | 'error'
 
@@ -65,6 +67,7 @@ type SessionEntry = {
 }
 
 const sessions = new Map<string, SessionEntry>()
+let watchdogHandle: NodeJS.Timeout | null = null
 
 function emptySyncSnapshot(): SyncSnapshot {
   return {
@@ -248,6 +251,27 @@ async function waitForConnected(instanceId: string, timeoutMs: number): Promise<
   return null
 }
 
+function connectedSessionForWorkspace(workspaceId: string): SessionEntry | null {
+  return (
+    Array.from(sessions.values()).find((entry) => entry.workspaceId === workspaceId && entry.pairing_status === 'connected' && Boolean(entry.sock)) ?? null
+  )
+}
+
+async function waitForWorkspaceConnected(workspaceId: string, timeoutMs: number): Promise<SessionEntry | null> {
+  const startedAt = Date.now()
+  let attemptedReconnect = false
+  while (Date.now() - startedAt < timeoutMs) {
+    const connected = connectedSessionForWorkspace(workspaceId)
+    if (connected) return connected
+    if (!attemptedReconnect) {
+      attemptedReconnect = true
+      await ensureWorkspaceWhatsAppConnected(workspaceId).catch(() => false)
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+  }
+  return connectedSessionForWorkspace(workspaceId)
+}
+
 export function getSession(instanceId: string): SessionEntry | undefined {
   return sessions.get(instanceId)
 }
@@ -330,6 +354,10 @@ export async function sendWorkspaceTextMessage(args: {
   }
 
   if (!session?.sock) {
+    session = await waitForWorkspaceConnected(args.workspaceId, SEND_WAIT_FOR_CONNECT_MS)
+  }
+
+  if (!session?.sock) {
     throw new Error('WhatsApp is not connected for this workspace. Click Start / refresh, scan the QR if shown, then send again.')
   }
 
@@ -359,6 +387,45 @@ export async function ensureWorkspaceWhatsAppConnected(workspaceId: string): Pro
   }
 
   return false
+}
+
+async function runWhatsAppWatchdogTick(): Promise<void> {
+  const admin = getServiceRoleClient()
+  const { data, error } = await admin
+    .from('whatsapp_instances')
+    .select('id, workspace_id, pairing_status')
+    .in('pairing_status', ['connected', 'disconnected'])
+    .order('last_connected_at', { ascending: false })
+    .limit(100)
+  if (error) {
+    logger.error({ err: error }, 'WhatsApp watchdog failed to load instances')
+    return
+  }
+
+  for (const row of data ?? []) {
+    const instanceId = row.id as string | undefined
+    const workspaceId = row.workspace_id as string | undefined
+    if (!instanceId || !workspaceId) continue
+    const current = sessions.get(instanceId)
+    if (current?.sock && current.pairing_status === 'connected') continue
+    if (current?.starting) continue
+    await ensureWorkspaceSocket(workspaceId, instanceId).catch((watchdogErr) => {
+      logger.warn({ err: watchdogErr, workspaceId, instanceId }, 'WhatsApp watchdog reconnect attempt failed')
+    })
+  }
+}
+
+export function startWhatsAppWatchdog(): NodeJS.Timeout {
+  if (watchdogHandle) return watchdogHandle
+  watchdogHandle = setInterval(() => {
+    void runWhatsAppWatchdogTick().catch((error) => {
+      logger.error({ err: error }, 'WhatsApp watchdog tick failed')
+    })
+  }, WATCHDOG_INTERVAL_MS)
+  void runWhatsAppWatchdogTick().catch((error) => {
+    logger.error({ err: error }, 'WhatsApp watchdog initial tick failed')
+  })
+  return watchdogHandle
 }
 
 export async function requestWorkspaceHistorySync(workspaceId: string, instanceId: string): Promise<void> {

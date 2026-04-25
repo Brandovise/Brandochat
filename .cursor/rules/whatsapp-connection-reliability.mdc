@@ -1,0 +1,14 @@
+---
+description: WhatsApp connection reliability requirements
+globs: automation-platform/backend/src/**/*.{ts,tsx}
+alwaysApply: true
+---
+
+# WhatsApp connection reliability
+
+- Use a **connection-first** model for WhatsApp automation delivery.
+- Keep a background watchdog that periodically reconnects eligible workspace instances.
+- Before any trigger workflow runs, attempt to ensure a workspace WhatsApp socket is connected.
+- During sends, prefer waiting briefly for reconnection (bounded timeout) over immediate failure.
+- Preserve clear user-facing failures when QR re-auth is required; do not hide real logged-out states.
+- Do not remove/skip existing safeguards for persisted auth (`WA_AUTH_ROOT`) and backup/restore flow.
