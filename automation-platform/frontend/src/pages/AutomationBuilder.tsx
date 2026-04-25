@@ -1072,7 +1072,8 @@ function NodeProperties({
               <option value="Current conversation contact">Current conversation contact</option>
               <option value="{{contact.wa_jid}}">Contact WhatsApp JID</option>
               <option value="{{contact.phone_e164}}">Contact phone</option>
-              <option value="Custom">Custom recipient variable</option>
+              <option value="{{inviteePhone}}">Calendly invitee phone</option>
+              <option value="{{qa.handynummer}}">Calendly Q&A phone (Handynummer)</option>
             </select>
           </FormField>
           <FormField label="Template">

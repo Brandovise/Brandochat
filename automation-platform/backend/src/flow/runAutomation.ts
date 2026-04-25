@@ -4,6 +4,7 @@ import OpenAI from 'openai'
 import { env } from '../config/env.js'
 import { applyTemplateVars, buildContactPlaceholderVars, readVariable, type AutomationGraph } from './graphRuntime.js'
 import type { AutomationRunRow } from './types.js'
+import { sendWorkspaceTextMessage } from '../wa/baileysSession.js'
 
 export type FlowStateRow = {
   id: string
@@ -22,6 +23,19 @@ type TraceEntry = {
 
 function toTemplateVars(vars: Record<string, unknown>): Record<string, string> {
   return Object.fromEntries(Object.entries(vars).map(([key, value]) => [key, value == null ? '' : String(value)]))
+}
+
+function toWhatsAppJid(value: string): string {
+  const trimmed = value.trim()
+  if (!trimmed) return ''
+  if (trimmed.includes('@')) return trimmed
+  const digits = trimmed.replace(/[^\d]/g, '')
+  return digits ? `${digits}@s.whatsapp.net` : ''
+}
+
+function phoneFromJid(jid: string): string {
+  const digits = jid.split('@')[0]?.replace(/[^\d]/g, '') ?? ''
+  return digits ? `+${digits}` : ''
 }
 
 function appendTrace(
@@ -187,10 +201,6 @@ async function executeStateMachine(
       return
     }
     if (node.type === 'send') {
-      if (!args.contactId || !args.contactJid || !args.sock) {
-        await patchState({ status: 'failed', current_node_id: current, error: 'Send node requires a connected WhatsApp contact' })
-        return
-      }
       const { data: tpl } = await admin
         .from('message_templates')
         .select('body')
@@ -198,14 +208,72 @@ async function executeStateMachine(
         .maybeSingle()
       const contactVars = await loadContactVars(admin, args.contactId)
       const mergedVars = { ...contactVars, ...variables }
-      const body = applyTemplateVars((tpl?.body as string) ?? '[missing template]', toTemplateVars(mergedVars))
-      await args.sock.sendMessage(args.contactJid, { text: body })
+      const templateVars = toTemplateVars(mergedVars)
+      const body = applyTemplateVars((tpl?.body as string) ?? '[missing template]', templateVars)
+      const toField = typeof node.to === 'string' ? node.to : ''
+      const recipientRaw =
+        !toField || toField === 'Current conversation contact'
+          ? args.contactJid ?? ''
+          : toField === 'Custom'
+            ? ''
+            : applyTemplateVars(toField, templateVars)
+      const recipientJid = toWhatsAppJid(recipientRaw)
+      if (!recipientJid) {
+        await patchState({ status: 'failed', current_node_id: current, error: 'Send node could not resolve recipient phone/JID' })
+        return
+      }
+
+      let eventContactId = args.contactId ?? null
+      if (!eventContactId || (args.contactJid && args.contactJid !== recipientJid)) {
+        const { data: existingRecipient } = await admin
+          .from('contacts')
+          .select('id')
+          .eq('workspace_id', args.workspaceId)
+          .eq('wa_jid', recipientJid)
+          .maybeSingle()
+        if (existingRecipient?.id) {
+          eventContactId = existingRecipient.id as string
+        } else {
+          const { data: createdRecipient } = await admin
+            .from('contacts')
+            .insert({
+              workspace_id: args.workspaceId,
+              wa_jid: recipientJid,
+              phone_e164: phoneFromJid(recipientJid) || null,
+              display_name:
+                (typeof templateVars.inviteeName === 'string' && templateVars.inviteeName.trim()) ||
+                (typeof templateVars['contact.display_name'] === 'string' && templateVars['contact.display_name'].trim()) ||
+                null,
+              metadata: {
+                source: 'automation.send',
+                created_from_automation: true,
+              },
+            })
+            .select('id')
+            .single()
+          eventContactId = (createdRecipient?.id as string | undefined) ?? null
+        }
+      }
+
+      let waMessageId: string | null = null
+      if (args.sock) {
+        const sent = await args.sock.sendMessage(recipientJid, { text: body })
+        waMessageId = sent?.key.id ?? null
+      } else {
+        const sent = await sendWorkspaceTextMessage({
+          workspaceId: args.workspaceId,
+          jid: recipientJid,
+          text: body,
+        })
+        waMessageId = sent.waMessageId
+      }
       await admin.from('message_events').insert({
         workspace_id: args.workspaceId,
-        contact_id: args.contactId,
+        contact_id: eventContactId,
         conversation_id: args.conversationId ?? null,
         direction: 'outbound',
-        wa_chat_jid: args.contactJid,
+        wa_message_id: waMessageId,
+        wa_chat_jid: recipientJid,
         body,
         automation_id: args.automationId,
         node_id: current,
@@ -214,7 +282,7 @@ async function executeStateMachine(
         nodeId: current,
         nodeType: node.type,
         event: 'message_sent',
-        detail: { templateId: node.templateId, next: node.next ?? null, bodyPreview: body.slice(0, 300) },
+        detail: { templateId: node.templateId, to: toField || 'Current conversation contact', resolvedRecipient: recipientJid, next: node.next ?? null, bodyPreview: body.slice(0, 300) },
       })
       const next = node.next
       if (!next) {

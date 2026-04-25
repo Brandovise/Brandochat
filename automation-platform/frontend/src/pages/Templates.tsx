@@ -19,6 +19,26 @@ const BASE_PLACEHOLDERS: PlaceholderOption[] = [
   { value: 'skillReply', label: 'AI skill output', group: 'Automation' },
 ]
 
+const CALENDLY_PLACEHOLDERS: PlaceholderOption[] = [
+  { value: 'calendlyEvent', label: 'Event name', group: 'Calendly' },
+  { value: 'inviteeName', label: 'Invitee name', group: 'Calendly' },
+  { value: 'inviteeEmail', label: 'Invitee email', group: 'Calendly' },
+  { value: 'inviteePhone', label: 'Invitee phone', group: 'Calendly' },
+  { value: 'inviteeStatus', label: 'Invitee status', group: 'Calendly' },
+  { value: 'inviteeRescheduleUrl', label: 'Reschedule URL', group: 'Calendly' },
+  { value: 'inviteeCancelUrl', label: 'Cancel URL', group: 'Calendly' },
+  { value: 'schedulingMethod', label: 'Scheduling method', group: 'Calendly' },
+  { value: 'meetingName', label: 'Meeting name', group: 'Calendly' },
+  { value: 'meetingStart', label: 'Meeting start', group: 'Calendly' },
+  { value: 'meetingEnd', label: 'Meeting end', group: 'Calendly' },
+  { value: 'meetingJoinUrl', label: 'Meeting join URL', group: 'Calendly' },
+  { value: 'meetingStatus', label: 'Meeting status', group: 'Calendly' },
+  { value: 'eventType', label: 'Event type URI', group: 'Calendly' },
+  { value: 'eventUri', label: 'Scheduled event URI', group: 'Calendly' },
+  { value: 'timezone', label: 'Timezone', group: 'Calendly' },
+  { value: 'qa.handynummer', label: 'Q&A: Handynummer', group: 'Calendly' },
+]
+
 export default function Templates() {
   const { workspaceId } = useParams()
   const [rows, setRows] = useState<Row[]>([])
@@ -42,26 +62,33 @@ export default function Templates() {
   useEffect(() => {
     void load()
     if (!workspaceId) return
-    void supabase
-      .from('contacts')
-      .select('metadata')
-      .eq('workspace_id', workspaceId)
-      .limit(200)
-      .then(({ data }) => {
-        const customKeys = new Set<string>()
-        for (const row of data ?? []) {
-          const metadata = row.metadata as Record<string, unknown> | null
-          const attrs = metadata?.custom_attributes
-          if (!attrs || typeof attrs !== 'object' || Array.isArray(attrs)) continue
-          for (const key of Object.keys(attrs as Record<string, unknown>)) customKeys.add(key)
-        }
-        const customPlaceholders = [...customKeys].sort().map((key) => ({
-          value: `contact.attr.${key.replace(/[^\w.-]/g, '_')}`,
-          label: key,
-          group: 'Custom attributes',
-        }))
-        setPlaceholders([...BASE_PLACEHOLDERS, ...customPlaceholders])
-      })
+    void (async () => {
+      const [{ data: integrations }, { data: contacts }] = await Promise.all([
+        supabase
+          .from('workspace_integrations')
+          .select('provider')
+          .eq('workspace_id', workspaceId)
+          .eq('status', 'active'),
+        supabase.from('contacts').select('metadata').eq('workspace_id', workspaceId).limit(200),
+      ])
+
+      const providers = ((integrations ?? []) as Array<{ provider: string }>).map((row) => row.provider)
+
+      const customKeys = new Set<string>()
+      for (const row of contacts ?? []) {
+        const metadata = row.metadata as Record<string, unknown> | null
+        const attrs = metadata?.custom_attributes
+        if (!attrs || typeof attrs !== 'object' || Array.isArray(attrs)) continue
+        for (const key of Object.keys(attrs as Record<string, unknown>)) customKeys.add(key)
+      }
+      const customPlaceholders = [...customKeys].sort().map((key) => ({
+        value: `contact.attr.${key.replace(/[^\w.-]/g, '_')}`,
+        label: key,
+        group: 'Custom attributes',
+      }))
+      const integrationPlaceholders = providers.includes('calendly') ? CALENDLY_PLACEHOLDERS : []
+      setPlaceholders([...BASE_PLACEHOLDERS, ...integrationPlaceholders, ...customPlaceholders])
+    })()
   }, [workspaceId])
 
   function insertPlaceholder(value: string) {
@@ -113,7 +140,8 @@ export default function Templates() {
         <code className="text-emerald-300">{'{{contact.wa_jid}}'}</code>,{' '}
         <code className="text-emerald-300">{'{{contact.notes}}'}</code>, and{' '}
         <code className="text-emerald-300">{'{{contact.attr.plan}}'}</code> for each key in contact metadata
-        JSON.
+        JSON, plus Calendly fields like <code className="text-emerald-300">{'{{meetingJoinUrl}}'}</code> and Q&A keys like{' '}
+        <code className="text-emerald-300">{'{{qa.handynummer}}'}</code>.
       </p>
       <form onSubmit={add} className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/40 p-4">
         <input

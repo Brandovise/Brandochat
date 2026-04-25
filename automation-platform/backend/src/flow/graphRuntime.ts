@@ -1,5 +1,5 @@
 export type GraphNode =
-  | { type: 'send'; templateId: string; next?: string }
+  | { type: 'send'; templateId: string; to?: string; next?: string }
   | {
       type: 'branch'
       options: Array<{ id: string; next: string; label: string; hint: string }>
