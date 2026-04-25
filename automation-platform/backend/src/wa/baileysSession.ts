@@ -22,6 +22,7 @@ import { env } from '../config/env.js'
 import { getServiceRoleClient } from '../lib/supabase-clients.js'
 import { importHistorySyncBatch, upsertHistoryChats, upsertHistoryContacts } from './historySync.js'
 import { handleInboundText } from './inboundPipeline.js'
+import { restoreSessionAuthDirIfAvailable, scheduleSessionBackup } from './sessionBackup.js'
 
 const logger = pino({ level: 'warn' })
 const msgRetryCounterCache = new NodeCache() as CacheStore
@@ -77,6 +78,15 @@ function emptySyncSnapshot(): SyncSnapshot {
 
 function authDir(instanceId: string) {
   return path.join(env.WA_AUTH_ROOT, instanceId)
+}
+
+async function isAuthDirEmpty(dir: string): Promise<boolean> {
+  try {
+    const entries = await fs.readdir(dir)
+    return entries.length === 0
+  } catch {
+    return true
+  }
 }
 
 async function upsertInstance(
@@ -250,8 +260,9 @@ export async function restoreConnectedWhatsAppSessions(): Promise<void> {
   const admin = getServiceRoleClient()
   const { data, error } = await admin
     .from('whatsapp_instances')
-    .select('id, workspace_id, display_name')
-    .eq('pairing_status', 'connected')
+    .select('id, workspace_id, display_name, pairing_status, last_connected_at')
+    .in('pairing_status', ['connected', 'disconnected', 'qr'])
+    .order('last_connected_at', { ascending: false })
 
   if (error) {
     logger.error({ err: error }, 'Failed to load WhatsApp sessions for restore')
@@ -264,7 +275,15 @@ export async function restoreConnectedWhatsAppSessions(): Promise<void> {
     if (!instanceId || !workspaceId) continue
     void ensureWorkspaceSocket(workspaceId, instanceId)
       .then(() => {
-        logger.warn({ instanceId, workspaceId, displayName: instance.display_name }, 'Restored WhatsApp session listener')
+        logger.warn(
+          {
+            instanceId,
+            workspaceId,
+            displayName: instance.display_name,
+            pairingStatus: instance.pairing_status,
+          },
+          'Restored WhatsApp session listener',
+        )
       })
       .catch(async (restoreError) => {
         logger.error({ err: restoreError, instanceId, workspaceId }, 'Failed to restore WhatsApp session listener')
@@ -293,19 +312,20 @@ export async function sendWorkspaceTextMessage(args: {
   }
 
   if (!session?.sock && !args.instanceId) {
-    const { data: preferredInstance } = await admin
+    const { data: preferredInstances } = await admin
       .from('whatsapp_instances')
-      .select('id')
+      .select('id, pairing_status')
       .eq('workspace_id', args.workspaceId)
-      .eq('pairing_status', 'connected')
+      .in('pairing_status', ['connected', 'disconnected', 'qr'])
       .order('last_connected_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+      .limit(5)
 
-    const fallbackInstanceId = preferredInstance?.id as string | undefined
-    if (fallbackInstanceId) {
+    for (const candidate of preferredInstances ?? []) {
+      const fallbackInstanceId = candidate.id as string | undefined
+      if (!fallbackInstanceId) continue
       await ensureWorkspaceSocket(args.workspaceId, fallbackInstanceId)
       session = await waitForConnected(fallbackInstanceId, SEND_CONNECT_TIMEOUT_MS)
+      if (session?.sock && session.pairing_status === 'connected') break
     }
   }
 
@@ -426,6 +446,12 @@ export async function ensureWorkspaceSocket(workspaceId: string, instanceId: str
 
   const dir = authDir(instanceId)
   await fs.mkdir(dir, { recursive: true })
+  if (await isAuthDirEmpty(dir)) {
+    const restored = await restoreSessionAuthDirIfAvailable({ workspaceId, instanceId, authDir: dir }).catch(() => false)
+    if (restored) {
+      logger.warn({ instanceId, workspaceId }, 'Restored WhatsApp auth files from Supabase backup')
+    }
+  }
 
   const admin = getServiceRoleClient()
   const instanceSettings = await loadInstanceSettings(instanceId)
@@ -476,6 +502,7 @@ export async function ensureWorkspaceSocket(workspaceId: string, instanceId: str
         last_connected_at: new Date().toISOString(),
       })
       triggerAppStateSync(instanceId, sock)
+      scheduleSessionBackup({ workspaceId, instanceId, authDir: dir })
     }
     if (connection === 'close') {
       const code = disconnectStatusCode(lastDisconnect?.error)
@@ -500,6 +527,7 @@ export async function ensureWorkspaceSocket(workspaceId: string, instanceId: str
 
   sock.ev.on('creds.update', async () => {
     await saveCreds()
+    scheduleSessionBackup({ workspaceId, instanceId, authDir: dir })
   })
 
   sock.ev.on('messaging-history.set', async ({ chats, contacts, messages, isLatest, progress, syncType }) => {
