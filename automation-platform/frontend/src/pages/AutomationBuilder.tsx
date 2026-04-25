@@ -99,6 +99,20 @@ const BASE_VARIABLE_OPTIONS: VariableOption[] = [
   { value: 'whatsappInstanceId', label: 'WhatsApp number id', group: 'Trigger' },
   { value: 'conversationStatus', label: 'Conversation status', group: 'Trigger' },
   { value: 'contactStatus', label: 'Contact status', group: 'Trigger' },
+  { value: 'calendlyEvent', label: 'Calendly event name', group: 'Calendly trigger' },
+  { value: 'inviteeName', label: 'Invitee name', group: 'Calendly trigger' },
+  { value: 'inviteeEmail', label: 'Invitee email', group: 'Calendly trigger' },
+  { value: 'inviteePhone', label: 'Invitee phone', group: 'Calendly trigger' },
+  { value: 'inviteeStatus', label: 'Invitee status', group: 'Calendly trigger' },
+  { value: 'inviteeRescheduleUrl', label: 'Invitee reschedule URL', group: 'Calendly trigger' },
+  { value: 'inviteeCancelUrl', label: 'Invitee cancel URL', group: 'Calendly trigger' },
+  { value: 'meetingName', label: 'Meeting name', group: 'Calendly trigger' },
+  { value: 'meetingStart', label: 'Meeting start datetime', group: 'Calendly trigger' },
+  { value: 'meetingEnd', label: 'Meeting end datetime', group: 'Calendly trigger' },
+  { value: 'meetingJoinUrl', label: 'Meeting join URL (Google Meet)', group: 'Calendly trigger' },
+  { value: 'eventType', label: 'Calendly event type URI', group: 'Calendly trigger' },
+  { value: 'eventUri', label: 'Calendly event URI', group: 'Calendly trigger' },
+  { value: 'timezone', label: 'Calendly timezone', group: 'Calendly trigger' },
 ]
 
 function defaultNode(type: NodeType, index: number): BuilderNode {
@@ -714,11 +728,42 @@ export default function AutomationBuilder() {
             </select>
           </FormField>
           <TriggerConfig triggerType={triggerType} value={triggerConfig} whatsappInstances={whatsappInstances} onChange={setTriggerConfig} />
+          <PlaceholderHints triggerType={triggerType} />
           {selectedNode ? (
             <NodeProperties node={selectedNode} nodes={nodes} templates={templates} conditionVariables={conditionVariables} onChange={updateSelected} onRename={renameSelected} onDelete={() => deleteNode(selectedNode.id)} />
           ) : null}
         </aside>
       </section>
+    </div>
+  )
+}
+
+function PlaceholderHints({ triggerType }: { triggerType: TriggerType }) {
+  if (triggerType !== 'calendly.event') return null
+  const examples = [
+    '{{inviteeName}}',
+    '{{inviteeEmail}}',
+    '{{inviteePhone}}',
+    '{{meetingName}}',
+    '{{meetingStart}}',
+    '{{meetingJoinUrl}}',
+    '{{inviteeRescheduleUrl}}',
+    '{{inviteeCancelUrl}}',
+    '{{qa.handynummer}}',
+  ]
+  return (
+    <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-950/50 p-3">
+      <p className="text-sm font-medium text-white">Calendly placeholders</p>
+      <p className="text-xs text-slate-500">
+        Use these directly in message templates. Google Meet link is available as <span className="font-mono text-slate-300">{'{{meetingJoinUrl}}'}</span> when Calendly sends it.
+      </p>
+      <div className="grid gap-1">
+        {examples.map((item) => (
+          <code key={item} className="rounded bg-slate-900 px-2 py-1 text-xs text-slate-300">
+            {item}
+          </code>
+        ))}
+      </div>
     </div>
   )
 }

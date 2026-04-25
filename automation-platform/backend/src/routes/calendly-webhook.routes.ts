@@ -1,6 +1,7 @@
 import crypto from 'node:crypto'
 import { Router } from 'express'
 import { routeTrigger } from '../flow/triggerRouter.js'
+import { getCalendlyScheduledEvent } from '../integration/calendly/client.js'
 import { extractInviteePhone, normalizePhone, toCalendlyTriggerPayload } from '../integration/calendly/mapper.js'
 import { verifyCalendlySignature } from '../integration/calendly/signature.js'
 import { asyncHandler } from '../http/async-handler.js'
@@ -35,6 +36,10 @@ function readDeliveryId(headers: Record<string, unknown>): string {
 function toIdempotencyKey(workspaceId: string, deliveryId: string, rawBody: string): string {
   if (deliveryId) return `delivery:${workspaceId}:${deliveryId}`
   return `hash:${workspaceId}:${crypto.createHash('sha256').update(rawBody).digest('hex')}`
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 async function addIntegrationLog(args: {
@@ -118,12 +123,13 @@ export function createCalendlyWebhookRouter(): Router {
 
       const { data: integration } = await admin
         .from('workspace_integrations')
-        .select('id, settings')
+        .select('id, settings, credentials')
         .eq('workspace_id', workspaceId)
         .eq('provider', 'calendly')
         .maybeSingle()
       const integrationId = (integration?.id as string | undefined) ?? null
       const settings = toObject(integration?.settings)
+      const credentials = toObject(integration?.credentials)
 
       const deliveryId = readDeliveryId(headers)
       const idempotencyKey = toIdempotencyKey(workspaceId, deliveryId, rawBody || JSON.stringify(body))
@@ -174,6 +180,29 @@ export function createCalendlyWebhookRouter(): Router {
       }
 
       const triggerPayload = toCalendlyTriggerPayload(body)
+      const token = typeof credentials.api_key === 'string' ? credentials.api_key : typeof credentials.access_token === 'string' ? credentials.access_token : ''
+      const eventUri = typeof triggerPayload.eventUri === 'string' ? triggerPayload.eventUri : ''
+      let meetingJoinUrl = typeof triggerPayload.meetingJoinUrl === 'string' ? triggerPayload.meetingJoinUrl : ''
+      const initialLocationStatus = toObject(toObject(body.payload).scheduled_event).location
+      const locationStatus = typeof toObject(initialLocationStatus).status === 'string' ? String(toObject(initialLocationStatus).status) : ''
+      const needsJoinUrlEnrichment = Boolean(token && eventUri && (!meetingJoinUrl || locationStatus.toLowerCase() === 'processing'))
+
+      if (needsJoinUrlEnrichment) {
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          try {
+            const eventResource = await getCalendlyScheduledEvent(token, eventUri)
+            const joinUrl = toObject(eventResource.location).join_url
+            if (typeof joinUrl === 'string' && joinUrl.trim()) {
+              meetingJoinUrl = joinUrl.trim()
+              triggerPayload.meetingJoinUrl = meetingJoinUrl
+              break
+            }
+          } catch {
+            // Best-effort enrichment only. Continue with original webhook payload.
+          }
+          await sleep(1500)
+        }
+      }
       const inviteePhone = normalizePhone(extractInviteePhone(body))
       let contactId: string | undefined
       let contactJid: string | undefined
@@ -211,6 +240,7 @@ export function createCalendlyWebhookRouter(): Router {
         contactJid,
         payload: {
           ...triggerPayload,
+          meetingJoinUrl,
           calendlyDeliveryId: deliveryId || null,
           calendlyEventId: body.event as string | undefined,
         },

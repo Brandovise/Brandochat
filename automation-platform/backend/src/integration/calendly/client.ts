@@ -33,6 +33,20 @@ export type CalendlyWebhookResource = {
   creator: string | null
 }
 
+export type CalendlyScheduledEventResource = {
+  uri: string
+  name: string
+  status: string
+  start_time: string
+  end_time: string
+  event_type: string
+  location?: {
+    type?: string
+    status?: string
+    join_url?: string
+  } | null
+}
+
 type RequestOptions = {
   method?: 'GET' | 'POST'
   body?: Record<string, unknown>
@@ -111,4 +125,11 @@ export async function listCalendlyWebhookSubscriptions(token: string, organizati
   const params = new URLSearchParams({ organization, count: '100' })
   const data = await calendlyRequest<{ collection?: CalendlyWebhookResource[] }>(token, `/webhook_subscriptions?${params.toString()}`)
   return data.collection ?? []
+}
+
+export async function getCalendlyScheduledEvent(token: string, eventUri: string): Promise<CalendlyScheduledEventResource> {
+  const uri = eventUri.trim()
+  const path = uri.startsWith(CALENDLY_API_BASE) ? uri.slice(CALENDLY_API_BASE.length) : uri
+  const data = await calendlyRequest<{ resource: CalendlyScheduledEventResource }>(token, path)
+  return data.resource
 }

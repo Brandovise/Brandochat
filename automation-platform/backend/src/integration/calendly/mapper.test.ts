@@ -85,4 +85,29 @@ describe('calendly mapper', () => {
     expect(payload['qa.handynummer']).toBe('+92 334 2208210')
     expect(payload['qa.company_name']).toBe('Brandovise')
   })
+
+  it('keeps google meet join url even when location status is processing', () => {
+    const payload = toCalendlyTriggerPayload({
+      event: 'invitee.created',
+      payload: {
+        name: 'Jibran Shahid',
+        email: 'jshahid+test@brandovise.com',
+        timezone: 'Europe/Berlin',
+        scheduled_event: {
+          name: 'Intro call',
+          start_time: '2026-04-28T08:00:00.000000Z',
+          end_time: '2026-04-28T08:30:00.000000Z',
+          event_type: 'https://api.calendly.com/event_types/0667f82c-538e-4594-a68b-edd7a9a26e97',
+          uri: 'https://api.calendly.com/scheduled_events/8508c4e7-b469-4e22-9496-57ea0f7bf496',
+          location: {
+            type: 'google_conference',
+            status: 'processing',
+            join_url: 'https://calendly.com/events/8508c4e7-b469-4e22-9496-57ea0f7bf496/google_meet',
+          },
+        },
+      },
+    })
+
+    expect(payload.meetingJoinUrl).toBe('https://calendly.com/events/8508c4e7-b469-4e22-9496-57ea0f7bf496/google_meet')
+  })
 })
