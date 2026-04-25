@@ -8,6 +8,31 @@ function asString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+function toSafeKey(input: string): string {
+  return input
+    .toLowerCase()
+    .trim()
+    .replace(/[^\p{L}\p{N}]+/gu, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 80)
+}
+
+function readQuestionsAndAnswers(payload: AnyRecord): Record<string, string> {
+  const questionsAndAnswers = payload.questions_and_answers
+  if (!Array.isArray(questionsAndAnswers)) return {}
+  const out: Record<string, string> = {}
+  for (const item of questionsAndAnswers) {
+    const row = asRecord(item)
+    const question = asString(row.question)
+    const answer = asString(row.answer)
+    if (!question || !answer) continue
+    const key = toSafeKey(question)
+    if (!key) continue
+    out[`qa.${key}`] = answer
+  }
+  return out
+}
+
 export function normalizePhone(input: string): string {
   if (!input) return ''
   const cleaned = input.replace(/[^\d+]/g, '')
@@ -56,15 +81,25 @@ export function toCalendlyTriggerPayload(eventPayload: AnyRecord): Record<string
   const event = asString(eventPayload.event)
   const invitee = asRecord(payload.invitee)
   const scheduledEvent = asRecord(payload.scheduled_event)
+  const location = asRecord(scheduledEvent.location)
+  const questionAnswers = readQuestionsAndAnswers(payload)
   return {
     calendlyEvent: event,
-    inviteeName: asString(invitee.name),
-    inviteeEmail: asString(invitee.email),
+    inviteeName: asString(invitee.name) || asString(payload.name),
+    inviteeEmail: asString(invitee.email) || asString(payload.email),
     inviteePhone: extractInviteePhone(eventPayload),
+    inviteeStatus: asString(payload.status),
+    inviteeCancelUrl: asString(payload.cancel_url),
+    inviteeRescheduleUrl: asString(payload.reschedule_url),
+    schedulingMethod: asString(payload.scheduling_method),
     meetingStart: asString(scheduledEvent.start_time),
     meetingEnd: asString(scheduledEvent.end_time),
+    meetingName: asString(scheduledEvent.name),
+    meetingStatus: asString(scheduledEvent.status),
+    meetingJoinUrl: asString(location.join_url),
     eventType: asString(scheduledEvent.event_type),
     eventUri: asString(scheduledEvent.uri),
     timezone: asString(payload.timezone) || asString(invitee.timezone),
+    ...questionAnswers,
   }
 }
