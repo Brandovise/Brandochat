@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useWorkspaceId } from '../shared/hooks/useWorkspaceId'
 import { Button } from '../shared/ui/button'
@@ -14,6 +15,19 @@ type Contact = {
   display_name: string | null
   notes: string | null
   metadata: Record<string, unknown> | null
+}
+
+type ContactList = {
+  id: string
+  name: string
+  color: string
+  description: string | null
+}
+
+type ContactTag = {
+  id: string
+  name: string
+  color: string
 }
 
 type AttributeType = 'string' | 'date' | 'datetime' | 'url' | 'integer'
@@ -119,8 +133,23 @@ function attributesFromMetadata(metadata: Contact['metadata']): AttributeInput[]
 }
 
 export default function ContactsPage() {
+  const [searchParams] = useSearchParams()
   const workspaceId = useWorkspaceId()
+  const view = searchParams.get('view') ?? 'all'
+  const selectedListFilter = searchParams.get('list') ?? ''
+  const selectedTagFilter = searchParams.get('tag') ?? ''
   const [rows, setRows] = useState<Contact[]>([])
+  const [selectedContactIds, setSelectedContactIds] = useState<string[]>([])
+  const [lists, setLists] = useState<ContactList[]>([])
+  const [tags, setTags] = useState<ContactTag[]>([])
+  const [listMemberships, setListMemberships] = useState<Array<{ list_id: string; contact_id: string }>>([])
+  const [tagMemberships, setTagMemberships] = useState<Array<{ tag_id: string; contact_id: string }>>([])
+  const [newListName, setNewListName] = useState('')
+  const [newListColor, setNewListColor] = useState('#10b981')
+  const [newTagName, setNewTagName] = useState('')
+  const [newTagColor, setNewTagColor] = useState('#0ea5e9')
+  const [selectedListId, setSelectedListId] = useState('')
+  const [selectedTagId, setSelectedTagId] = useState('')
   const [waJid, setWaJid] = useState('')
   const [phone, setPhone] = useState('')
   const [firstName, setFirstName] = useState('')
@@ -164,9 +193,35 @@ export default function ContactsPage() {
     setRows(allRows)
   }, [workspaceId])
 
+  const loadListsAndTags = useCallback(async () => {
+    if (!workspaceId) return
+    const [{ data: listRows, error: listErr }, { data: tagRows, error: tagErr }, { data: listMemberRows }, { data: tagMemberRows }] = await Promise.all([
+      supabase.from('workspace_contact_lists').select('id, name, color, description').eq('workspace_id', workspaceId).order('name'),
+      supabase.from('workspace_contact_tags').select('id, name, color').eq('workspace_id', workspaceId).order('name'),
+      supabase.from('contact_list_members').select('list_id, contact_id').eq('workspace_id', workspaceId),
+      supabase.from('contact_tag_members').select('tag_id, contact_id').eq('workspace_id', workspaceId),
+    ])
+    if (listErr) {
+      setError(listErr.message)
+      return
+    }
+    if (tagErr) {
+      setError(tagErr.message)
+      return
+    }
+    setLists((listRows as ContactList[] | null) ?? [])
+    setTags((tagRows as ContactTag[] | null) ?? [])
+    setListMemberships((listMemberRows as Array<{ list_id: string; contact_id: string }> | null) ?? [])
+    setTagMemberships((tagMemberRows as Array<{ tag_id: string; contact_id: string }> | null) ?? [])
+  }, [workspaceId])
+
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    void loadListsAndTags()
+  }, [loadListsAndTags])
 
   async function handleCreate(event: React.FormEvent) {
     event.preventDefault()
@@ -241,23 +296,94 @@ export default function ContactsPage() {
     await load()
   }
 
+  async function createList(event: React.FormEvent) {
+    event.preventDefault()
+    if (!workspaceId || !newListName.trim()) return
+    setError(null)
+    const { error: insertErr } = await supabase.from('workspace_contact_lists').insert({
+      workspace_id: workspaceId,
+      name: newListName.trim(),
+      color: newListColor,
+    })
+    if (insertErr) {
+      setError(insertErr.message)
+      return
+    }
+    setNewListName('')
+    await loadListsAndTags()
+  }
+
+  async function createTag(event: React.FormEvent) {
+    event.preventDefault()
+    if (!workspaceId || !newTagName.trim()) return
+    setError(null)
+    const { error: insertErr } = await supabase.from('workspace_contact_tags').insert({
+      workspace_id: workspaceId,
+      name: newTagName.trim(),
+      color: newTagColor,
+    })
+    if (insertErr) {
+      setError(insertErr.message)
+      return
+    }
+    setNewTagName('')
+    await loadListsAndTags()
+  }
+
+  async function addSelectedToList() {
+    if (!workspaceId || !selectedListId || selectedContactIds.length === 0) return
+    setError(null)
+    const payload = selectedContactIds.map((contactId) => ({ workspace_id: workspaceId, list_id: selectedListId, contact_id: contactId }))
+    const { error: insertErr } = await supabase.from('contact_list_members').upsert(payload, { onConflict: 'list_id,contact_id' })
+    if (insertErr) {
+      setError(insertErr.message)
+      return
+    }
+    await loadListsAndTags()
+  }
+
+  async function addSelectedToTag() {
+    if (!workspaceId || !selectedTagId || selectedContactIds.length === 0) return
+    setError(null)
+    const payload = selectedContactIds.map((contactId) => ({ workspace_id: workspaceId, tag_id: selectedTagId, contact_id: contactId }))
+    const { error: insertErr } = await supabase.from('contact_tag_members').upsert(payload, { onConflict: 'tag_id,contact_id' })
+    if (insertErr) {
+      setError(insertErr.message)
+      return
+    }
+    await loadListsAndTags()
+  }
+
   if (!workspaceId) {
     return <p className="text-slate-500">Missing workspace.</p>
   }
 
-  const visibleRows = rows.filter((row) => {
-    const haystack = [row.display_name, row.wa_jid, row.phone_e164, standardField(row, 'first_name'), standardField(row, 'last_name')]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase()
-    return haystack.includes(search.toLowerCase())
-  })
+  const visibleRows = useMemo(
+    () =>
+      rows.filter((row) => {
+        const haystack = [row.display_name, row.wa_jid, row.phone_e164, standardField(row, 'first_name'), standardField(row, 'last_name')]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+        if (!haystack.includes(search.toLowerCase())) return false
+        if (selectedListFilter && !listMemberships.some((member) => member.list_id === selectedListFilter && member.contact_id === row.id)) return false
+        if (selectedTagFilter && !tagMemberships.some((member) => member.tag_id === selectedTagFilter && member.contact_id === row.id)) return false
+        return true
+      }),
+    [rows, search, selectedListFilter, selectedTagFilter, listMemberships, tagMemberships],
+  )
 
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <PageHeader
-          title={`All contacts ${rows.length ? `(${rows.length})` : ''}`}
+          title={
+            view === 'lists'
+              ? `Contact lists (${lists.length})`
+              : view === 'tags'
+                ? `Contact tags (${tags.length})`
+                : `All contacts ${rows.length ? `(${rows.length})` : ''}`
+          }
           description="Manage workspace contacts and custom attributes used in automation placeholders."
         />
         <div className="flex flex-wrap gap-2">
@@ -388,6 +514,63 @@ export default function ContactsPage() {
         </section>
       ) : null}
 
+      {view === 'lists' ? (
+        <section className="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-semibold text-white">Contact lists ({lists.length})</h2>
+          </div>
+          <form onSubmit={createList} className="grid gap-2 sm:grid-cols-[1fr_130px_auto]">
+            <TextInput value={newListName} onChange={(event) => setNewListName(event.target.value)} placeholder="New list name" />
+            <TextInput type="color" value={newListColor} onChange={(event) => setNewListColor(event.target.value)} />
+            <Button type="submit">Create list</Button>
+          </form>
+          {lists.length === 0 ? <p className="text-sm text-slate-500">No lists yet.</p> : null}
+          <div className="grid gap-2 sm:grid-cols-2">
+            {lists.map((list) => {
+              const count = listMemberships.filter((member) => member.list_id === list.id).length
+              return (
+                <article key={list.id} className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                  <div className="flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-full" style={{ backgroundColor: list.color }} />
+                    <p className="font-medium text-white">{list.name}</p>
+                    <span className="ml-auto text-xs text-slate-500">{count} contacts</span>
+                  </div>
+                </article>
+              )
+            })}
+          </div>
+        </section>
+      ) : null}
+
+      {view === 'tags' ? (
+        <section className="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-semibold text-white">Contact tags ({tags.length})</h2>
+          </div>
+          <form onSubmit={createTag} className="grid gap-2 sm:grid-cols-[1fr_130px_auto]">
+            <TextInput value={newTagName} onChange={(event) => setNewTagName(event.target.value)} placeholder="New tag name" />
+            <TextInput type="color" value={newTagColor} onChange={(event) => setNewTagColor(event.target.value)} />
+            <Button type="submit">Create tag</Button>
+          </form>
+          {tags.length === 0 ? <p className="text-sm text-slate-500">No tags yet.</p> : null}
+          <div className="grid gap-2 sm:grid-cols-2">
+            {tags.map((tag) => {
+              const count = tagMemberships.filter((member) => member.tag_id === tag.id).length
+              return (
+                <article key={tag.id} className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                  <div className="flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-full" style={{ backgroundColor: tag.color }} />
+                    <p className="font-medium text-white">{tag.name}</p>
+                    <span className="ml-auto text-xs text-slate-500">{count} contacts</span>
+                  </div>
+                </article>
+              )
+            })}
+          </div>
+        </section>
+      ) : null}
+
+      {view === 'all' ? (
       <section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50">
         <div className="flex flex-col gap-3 border-b border-slate-800 p-4 sm:flex-row sm:items-center sm:justify-between">
           <TextInput
@@ -401,10 +584,45 @@ export default function ContactsPage() {
             <span>1 / 1</span>
           </div>
         </div>
+        <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 px-4 py-3">
+          <select value={selectedListId} onChange={(event) => setSelectedListId(event.target.value)} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs text-white">
+            <option value="">Choose list</option>
+            {lists.map((list) => (
+              <option key={list.id} value={list.id}>
+                {list.name}
+              </option>
+            ))}
+          </select>
+          <Button type="button" variant="secondary" className="px-3 py-1.5 text-xs" disabled={!selectedListId || selectedContactIds.length === 0} onClick={() => void addSelectedToList()}>
+            Add selected to list
+          </Button>
+          <select value={selectedTagId} onChange={(event) => setSelectedTagId(event.target.value)} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs text-white">
+            <option value="">Choose tag</option>
+            {tags.map((tag) => (
+              <option key={tag.id} value={tag.id}>
+                {tag.name}
+              </option>
+            ))}
+          </select>
+          <Button type="button" variant="secondary" className="px-3 py-1.5 text-xs" disabled={!selectedTagId || selectedContactIds.length === 0} onClick={() => void addSelectedToTag()}>
+            Add selected to tag
+          </Button>
+          <span className="ml-auto text-xs text-slate-500">{selectedContactIds.length} selected</span>
+        </div>
         <div className="overflow-x-auto">
           <table className="min-w-full text-left text-sm">
             <thead className="border-b border-slate-800 bg-slate-950/50 text-xs uppercase tracking-wide text-slate-500">
               <tr>
+                <th className="px-4 py-3">
+                  <input
+                    type="checkbox"
+                    checked={visibleRows.length > 0 && selectedContactIds.length === visibleRows.length}
+                    onChange={(event) => {
+                      if (event.target.checked) setSelectedContactIds(visibleRows.map((row) => row.id))
+                      else setSelectedContactIds([])
+                    }}
+                  />
+                </th>
                 <th className="px-4 py-3">Name</th>
                 <th className="px-4 py-3">Conversations</th>
                 <th className="px-4 py-3">Email</th>
@@ -416,13 +634,23 @@ export default function ContactsPage() {
             <tbody className="divide-y divide-slate-800">
               {visibleRows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
+                  <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
                     No contacts found.
                   </td>
                 </tr>
               ) : (
                 visibleRows.map((row) => (
                   <tr key={row.id} className="align-top hover:bg-slate-800/30">
+                    <td className="px-4 py-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedContactIds.includes(row.id)}
+                        onChange={(event) => {
+                          if (event.target.checked) setSelectedContactIds((current) => [...new Set([...current, row.id])])
+                          else setSelectedContactIds((current) => current.filter((id) => id !== row.id))
+                        }}
+                      />
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-800 text-xs font-semibold text-slate-300">
@@ -459,6 +687,7 @@ export default function ContactsPage() {
           </table>
         </div>
       </section>
+      ) : null}
 
     </div>
   )

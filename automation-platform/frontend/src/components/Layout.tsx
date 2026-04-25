@@ -13,6 +13,9 @@ type Workspace = {
   name: string
 }
 
+type ContactListLite = { id: string; name: string }
+type ContactTagLite = { id: string; name: string }
+
 function initials(name: string): string {
   return name
     .split(/\s+/)
@@ -112,6 +115,8 @@ export function WorkspaceShell() {
   const base = `/w/${workspaceId}`
   const [stats, setStats] = useState({ connected: 0, unread: 0, assigned: 0 })
   const [workspaceName, setWorkspaceName] = useState('Current workspace')
+  const [contactLists, setContactLists] = useState<ContactListLite[]>([])
+  const [contactTags, setContactTags] = useState<ContactTagLite[]>([])
 
   const loadStats = useCallback(async () => {
     if (!workspaceId) return
@@ -150,9 +155,19 @@ export function WorkspaceShell() {
       })
   }, [workspaceId])
 
+  useEffect(() => {
+    if (!workspaceId) return
+    void Promise.all([
+      supabase.from('workspace_contact_lists').select('id, name').eq('workspace_id', workspaceId).order('name').limit(50),
+      supabase.from('workspace_contact_tags').select('id, name').eq('workspace_id', workspaceId).order('name').limit(50),
+    ]).then(([listsRes, tagsRes]) => {
+      setContactLists((listsRes.data as ContactListLite[] | null) ?? [])
+      setContactTags((tagsRes.data as ContactTagLite[] | null) ?? [])
+    })
+  }, [workspaceId])
+
   const productItems = useMemo(
     () => [
-      { to: `${base}/contacts`, label: 'Contacts', symbol: '👥' },
       { to: `${base}/templates`, label: 'Templates', symbol: '🧩' },
       { to: `${base}/automations`, label: 'Automations', symbol: '⚡' },
       { to: `${base}/whatsapp`, label: 'WhatsApp numbers', symbol: '🟢', badge: stats.connected },
@@ -195,6 +210,61 @@ export function WorkspaceShell() {
         </div>
 
         <nav className="space-y-1 border-t border-slate-800 pt-2">
+          <div className="px-2 py-1 text-xs uppercase tracking-wide text-slate-500">Contacts</div>
+          <NavLink to={`${base}/contacts`} end className={navCls}>
+            <span className="mr-1 inline-flex h-8 w-8 items-center justify-center rounded-xl bg-slate-800 text-base text-slate-300">👥</span>
+            <span>All contacts</span>
+          </NavLink>
+          <NavLink to={`${base}/contacts?view=lists`} className={navCls}>
+            <span className="mr-1 inline-flex h-8 w-8 items-center justify-center rounded-xl bg-slate-800 text-base text-slate-300">📋</span>
+            <span>Lists</span>
+          </NavLink>
+          <div className="ml-11 space-y-1 pb-1">
+            {contactLists.slice(0, 10).map((list) => (
+              <NavLink
+                key={list.id}
+                to={`${base}/contacts?view=all&list=${list.id}`}
+                className={({ isActive }) =>
+                  `block rounded-md px-2 py-1 text-xs transition ${
+                    isActive ? 'bg-emerald-500/10 text-emerald-300' : 'text-slate-500 hover:bg-slate-800 hover:text-slate-300'
+                  }`
+                }
+              >
+                {list.name}
+              </NavLink>
+            ))}
+            {contactLists.length > 10 ? (
+              <NavLink to={`${base}/contacts?view=lists`} className="block rounded-md px-2 py-1 text-xs text-slate-400 hover:bg-slate-800 hover:text-slate-200">
+                See more ({contactLists.length - 10}+)
+              </NavLink>
+            ) : null}
+          </div>
+          <NavLink to={`${base}/contacts?view=tags`} className={navCls}>
+            <span className="mr-1 inline-flex h-8 w-8 items-center justify-center rounded-xl bg-slate-800 text-base text-slate-300">🏷️</span>
+            <span>Tags</span>
+          </NavLink>
+          <div className="ml-11 space-y-1 pb-1">
+            {contactTags.slice(0, 10).map((tag) => (
+              <NavLink
+                key={tag.id}
+                to={`${base}/contacts?view=all&tag=${tag.id}`}
+                className={({ isActive }) =>
+                  `block rounded-md px-2 py-1 text-xs transition ${
+                    isActive ? 'bg-emerald-500/10 text-emerald-300' : 'text-slate-500 hover:bg-slate-800 hover:text-slate-300'
+                  }`
+                }
+              >
+                {tag.name}
+              </NavLink>
+            ))}
+            {contactTags.length > 10 ? (
+              <NavLink to={`${base}/contacts?view=tags`} className="block rounded-md px-2 py-1 text-xs text-slate-400 hover:bg-slate-800 hover:text-slate-200">
+                See more ({contactTags.length - 10}+)
+              </NavLink>
+            ) : null}
+          </div>
+
+          <div className="mt-2 border-t border-slate-800 pt-2" />
           {productItems.map((item) => (
             <NavLink key={item.to} to={item.to} className={navCls}>
               <span className="mr-1 inline-flex h-8 w-8 items-center justify-center rounded-xl bg-slate-800 text-base text-slate-300">
