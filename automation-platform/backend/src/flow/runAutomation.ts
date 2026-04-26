@@ -286,6 +286,13 @@ async function executeStateMachine(
       } else {
         let sentError: unknown = null
         for (let attempt = 1; attempt <= SEND_RETRY_ATTEMPTS; attempt += 1) {
+          variables = appendTrace(variables, {
+            nodeId: current,
+            nodeType: node.type,
+            event: 'send_attempt',
+            detail: { attempt, maxAttempts: SEND_RETRY_ATTEMPTS, recipient: recipientJid },
+          })
+          await patchState({ status: 'running', current_node_id: current, variables })
           try {
             await withTimeout(
               ensureWorkspaceWhatsAppConnected(args.workspaceId).catch(() => false),
@@ -312,6 +319,18 @@ async function executeStateMachine(
               message.includes('timed out') ||
               message.includes('timed out waiting for message')
             if (!isRetryable || attempt === SEND_RETRY_ATTEMPTS) break
+            variables = appendTrace(variables, {
+              nodeId: current,
+              nodeType: node.type,
+              event: 'send_retry_wait',
+              detail: {
+                attempt,
+                maxAttempts: SEND_RETRY_ATTEMPTS,
+                retryInMs: SEND_RETRY_DELAY_MS,
+                error: message,
+              },
+            })
+            await patchState({ status: 'running', current_node_id: current, variables })
             await sleep(SEND_RETRY_DELAY_MS)
           }
         }
