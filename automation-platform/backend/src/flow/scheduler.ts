@@ -4,6 +4,7 @@ import { routeTrigger } from './triggerRouter.js'
 
 const TICK_MS = 60_000
 const DATETIME_RETRY_WINDOW_MS = 20 * 60_000
+const DATETIME_STALE_RUNNING_MS = 2 * 60_000
 
 function asObject(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
@@ -100,6 +101,11 @@ async function processAutomation(admin: SupabaseClient, automation: Record<strin
       const payload = (lastRun?.trigger_payload ?? {}) as Record<string, unknown>
       const sameValue = String(payload.value ?? '') === String(value)
       const isFailed = String(lastRun?.status ?? '') === 'failed'
+      const isRunning = String(lastRun?.status ?? '') === 'running'
+      const lastRunUpdatedAtMs =
+        typeof lastRun?.updated_at === 'string' ? Date.parse(lastRun.updated_at as string) : Number.NaN
+      const isStaleRunning =
+        isRunning && Number.isFinite(lastRunUpdatedAtMs) ? Date.now() - lastRunUpdatedAtMs > DATETIME_STALE_RUNNING_MS : false
       const { data: sameValueRun } = await admin
         .from('automation_runs')
         .select('id, status, updated_at, trigger_payload')
@@ -114,10 +120,22 @@ async function processAutomation(admin: SupabaseClient, automation: Record<strin
       })
       const isOrphanLock = !matchingRun
       // #region agent log
-      fetch('http://127.0.0.1:7271/ingest/f8faaa4f-224d-477d-aa48-fe5fcffd5b08',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'fc3e1c'},body:JSON.stringify({sessionId:'fc3e1c',runId:'pre-fix',hypothesisId:'H6',location:'scheduler.ts:96',message:'duplicate lock recovery check',data:{automationId:String(automation.id ?? ''),contactId:String(contact.id ?? ''),lockKey,lastRunId:String(lastRun?.id ?? ''),lastRunStatus:String(lastRun?.status ?? ''),sameValue,isFailed,matchingRunId:String(matchingRun?.id ?? ''),matchingRunStatus:String(matchingRun?.status ?? ''),isOrphanLock},timestamp:Date.now()})}).catch(()=>{});
+      fetch('http://127.0.0.1:7271/ingest/f8faaa4f-224d-477d-aa48-fe5fcffd5b08',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'fc3e1c'},body:JSON.stringify({sessionId:'fc3e1c',runId:'post-fix',hypothesisId:'H9',location:'scheduler.ts:96',message:'duplicate lock recovery check',data:{automationId:String(automation.id ?? ''),contactId:String(contact.id ?? ''),lockKey,lastRunId:String(lastRun?.id ?? ''),lastRunStatus:String(lastRun?.status ?? ''),sameValue,isFailed,isRunning,isStaleRunning,matchingRunId:String(matchingRun?.id ?? ''),matchingRunStatus:String(matchingRun?.status ?? ''),isOrphanLock},timestamp:Date.now()})}).catch(()=>{});
       // #endregion
       const canRecoverFromFailedMatchingRun = sameValue && isFailed
-      if (!(canRecoverFromFailedMatchingRun || isOrphanLock)) continue
+      const canRecoverFromStaleRunning = sameValue && isStaleRunning
+      if (!(canRecoverFromFailedMatchingRun || canRecoverFromStaleRunning || isOrphanLock)) continue
+      if (canRecoverFromStaleRunning && lastRun?.id) {
+        await admin
+          .from('automation_runs')
+          .update({
+            status: 'failed',
+            error: 'Run marked stale by scheduler lock recovery.',
+            completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', String(lastRun.id))
+      }
       await admin
         .from('scheduled_trigger_locks')
         .delete()
