@@ -86,7 +86,43 @@ async function processAutomation(admin: SupabaseClient, automation: Record<strin
       // #region agent log
       fetch('http://127.0.0.1:7271/ingest/f8faaa4f-224d-477d-aa48-fe5fcffd5b08',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'fc3e1c'},body:JSON.stringify({sessionId:'fc3e1c',runId:'pre-fix',hypothesisId:'H1',location:'scheduler.ts:82',message:'contact.datetime lock insert skipped',data:{automationId:String(automation.id ?? ''),contactId:String(contact.id ?? ''),lockKey,error:lockError.message},timestamp:Date.now()})}).catch(()=>{});
       // #endregion
-      continue
+      const isDuplicateLock = lockError.message.includes('scheduled_trigger_locks_automation_id_contact_id_lock_key_key')
+      if (!isDuplicateLock) continue
+      const { data: lastRun } = await admin
+        .from('automation_runs')
+        .select('id, status, updated_at, trigger_payload')
+        .eq('automation_id', String(automation.id))
+        .eq('contact_id', String(contact.id))
+        .eq('trigger_type', 'contact.datetime')
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      const payload = (lastRun?.trigger_payload ?? {}) as Record<string, unknown>
+      const sameValue = String(payload.value ?? '') === String(value)
+      const isFailed = String(lastRun?.status ?? '') === 'failed'
+      // #region agent log
+      fetch('http://127.0.0.1:7271/ingest/f8faaa4f-224d-477d-aa48-fe5fcffd5b08',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'fc3e1c'},body:JSON.stringify({sessionId:'fc3e1c',runId:'pre-fix',hypothesisId:'H6',location:'scheduler.ts:96',message:'duplicate lock recovery check',data:{automationId:String(automation.id ?? ''),contactId:String(contact.id ?? ''),lockKey,lastRunId:String(lastRun?.id ?? ''),lastRunStatus:String(lastRun?.status ?? ''),sameValue,isFailed},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      if (!(sameValue && isFailed)) continue
+      await admin
+        .from('scheduled_trigger_locks')
+        .delete()
+        .eq('workspace_id', workspaceId)
+        .eq('automation_id', String(automation.id))
+        .eq('contact_id', String(contact.id))
+        .eq('lock_key', lockKey)
+      const { error: lockRetryError } = await admin.from('scheduled_trigger_locks').insert({
+        workspace_id: workspaceId,
+        automation_id: automation.id,
+        contact_id: contact.id,
+        lock_key: lockKey,
+      })
+      // #region agent log
+      fetch('http://127.0.0.1:7271/ingest/f8faaa4f-224d-477d-aa48-fe5fcffd5b08',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'fc3e1c'},body:JSON.stringify({sessionId:'fc3e1c',runId:'pre-fix',hypothesisId:'H6',location:'scheduler.ts:114',message:'duplicate lock recovery retry result',data:{automationId:String(automation.id ?? ''),contactId:String(contact.id ?? ''),lockKey,retryError:lockRetryError?.message ?? null},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      if (lockRetryError) continue
+    } else {
+      // lock insert succeeded, proceed normally
     }
 
     await routeTrigger(admin, {
