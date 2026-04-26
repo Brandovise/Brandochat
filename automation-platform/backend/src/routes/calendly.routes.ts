@@ -9,7 +9,7 @@ import {
   type CalendlyScope,
   type CalendlyWebhookResource,
 } from '../integration/calendly/client.js'
-import { getServiceRoleClient } from '../lib/supabase-clients.js'
+import { createUserClient } from '../lib/supabase-clients.js'
 import { requireWorkspaceMember } from '../middleware/workspace-auth.middleware.js'
 import type { AuthenticatedWorkspaceRequest } from '../types/express.js'
 
@@ -39,6 +39,7 @@ function readEvents(raw: unknown): CalendlyEventType[] {
 }
 
 async function addIntegrationLog(args: {
+  accessToken: string
   workspaceId: string
   integrationId?: string | null
   provider?: 'calendly'
@@ -48,8 +49,8 @@ async function addIntegrationLog(args: {
   context?: Record<string, unknown>
   source?: 'backend' | 'frontend'
 }) {
-  const admin = getServiceRoleClient()
-  await admin.from('workspace_integration_logs').insert({
+  const db = createUserClient(args.accessToken)
+  await db.from('workspace_integration_logs').insert({
     workspace_id: args.workspaceId,
     integration_id: args.integrationId ?? null,
     provider: args.provider ?? 'calendly',
@@ -78,7 +79,7 @@ export function createCalendlyRouter(): Router {
       }
 
       const user = await getCalendlyCurrentUser(token)
-      const admin = getServiceRoleClient()
+      const db = createUserClient(authed.accessToken)
       const payload = {
         workspace_id: workspaceId,
         provider: 'calendly',
@@ -95,7 +96,7 @@ export function createCalendlyRouter(): Router {
         created_by: authed.userId,
       }
 
-      const { data, error } = await admin
+      const { data, error } = await db
         .from('workspace_integrations')
         .upsert(payload, { onConflict: 'workspace_id,provider' })
         .select('id, provider, auth_type, status, settings, updated_at')
@@ -103,6 +104,7 @@ export function createCalendlyRouter(): Router {
       if (error || !data) throw new Error(error?.message ?? 'Failed to save Calendly integration')
 
       await addIntegrationLog({
+        accessToken: authed.accessToken,
         workspaceId,
         integrationId: data.id as string,
         level: 'info',
@@ -152,8 +154,8 @@ export function createCalendlyRouter(): Router {
         return
       }
 
-      const admin = getServiceRoleClient()
-      const { data: integration, error: integrationErr } = await admin
+      const db = createUserClient(authed.accessToken)
+      const { data: integration, error: integrationErr } = await db
         .from('workspace_integrations')
         .select('id, credentials, settings')
         .eq('workspace_id', workspaceId)
@@ -221,7 +223,7 @@ export function createCalendlyRouter(): Router {
         duplicate = true
       }
 
-      const { data: webhookRow, error: webhookErr } = await admin
+      const { data: webhookRow, error: webhookErr } = await db
         .from('workspace_calendly_webhooks')
         .upsert(
           {
@@ -247,6 +249,7 @@ export function createCalendlyRouter(): Router {
       if (webhookErr || !webhookRow) throw new Error(webhookErr?.message ?? 'Failed to save Calendly webhook record')
 
       await addIntegrationLog({
+        accessToken: authed.accessToken,
         workspaceId,
         integrationId: integration.id as string,
         level: duplicate ? 'warn' : 'info',
@@ -270,8 +273,8 @@ export function createCalendlyRouter(): Router {
     asyncHandler(async (req, res) => {
       const authed = req as AuthenticatedWorkspaceRequest
       const workspaceId = authed.params.workspaceId
-      const admin = getServiceRoleClient()
-      const { data: integration, error: integrationErr } = await admin
+      const db = createUserClient(authed.accessToken)
+      const { data: integration, error: integrationErr } = await db
         .from('workspace_integrations')
         .select('id, credentials, settings')
         .eq('workspace_id', workspaceId)
@@ -298,6 +301,7 @@ export function createCalendlyRouter(): Router {
           remote = await listCalendlyWebhookSubscriptions(token, organization)
         } catch (error) {
           await addIntegrationLog({
+            accessToken: authed.accessToken,
             workspaceId,
             integrationId: integration.id as string,
             level: 'warn',
@@ -307,7 +311,7 @@ export function createCalendlyRouter(): Router {
         }
       }
 
-      const { data: rows, error: rowsErr } = await admin
+      const { data: rows, error: rowsErr } = await db
         .from('workspace_calendly_webhooks')
         .select('id, scope, events, callback_url, state, calendly_webhook_uri, created_at, updated_at')
         .eq('workspace_id', workspaceId)
