@@ -4,7 +4,7 @@ import { chooseBranchOption } from './openaiBranch.js'
 import { parseGraph } from './graphRuntime.js'
 import { executeAutomationRun } from './runAutomation.js'
 import type { AutomationRow, AutomationRunRow, TriggerEvent } from './types.js'
-import { ensureWorkspaceWhatsAppConnected } from '../wa/baileysSession.js'
+import { ensureWorkspaceWhatsAppConnected, getConnectedWorkspaceSocket } from '../wa/baileysSession.js'
 
 function asObject(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
@@ -258,6 +258,7 @@ export async function routeTrigger(
   // Pre-flight: try to establish a workspace WhatsApp socket before starting runs.
   // This helps scheduled/webhook triggers execute send nodes without requiring manual refresh.
   await ensureWorkspaceWhatsAppConnected(event.workspaceId).catch(() => false)
+  const workspaceSock = opts.sock ?? getConnectedWorkspaceSocket(event.workspaceId)
 
   const { data, error } = await admin
     .from('automations')
@@ -333,7 +334,7 @@ export async function routeTrigger(
       automationId: automation.id,
       graph,
       run: run as AutomationRunRow,
-      sock: opts.sock ?? null,
+      sock: workspaceSock,
     })
   }
 }

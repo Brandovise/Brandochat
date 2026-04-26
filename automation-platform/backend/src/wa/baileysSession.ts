@@ -280,6 +280,11 @@ export function getQr(instanceId: string): string | undefined {
   return sessions.get(instanceId)?.qr
 }
 
+export function getConnectedWorkspaceSocket(workspaceId: string): WASocket | null {
+  const session = connectedSessionForWorkspace(workspaceId)
+  return session?.sock ?? null
+}
+
 export async function restoreConnectedWhatsAppSessions(): Promise<void> {
   const admin = getServiceRoleClient()
   const { data, error } = await admin
