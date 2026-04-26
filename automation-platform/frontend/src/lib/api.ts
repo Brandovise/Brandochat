@@ -212,6 +212,13 @@ export async function waTestAutomation(
   return res.json() as Promise<{ ok: boolean; runId: string; mode?: 'run_now' | 'wait_for_message' }>
 }
 
+export async function waFetchMediaBlobUrl(workspaceId: string, messageEventId: string): Promise<string> {
+  const res = await fetchWithAuth(`${base}/wa/${workspaceId}/media/${messageEventId}`)
+  if (!res.ok) throw new Error(await readApiError(res))
+  const blob = await res.blob()
+  return URL.createObjectURL(blob)
+}
+
 export type CalendlyScope = 'organization' | 'user' | 'group'
 export type CalendlyEventType =
   | 'invitee.created'

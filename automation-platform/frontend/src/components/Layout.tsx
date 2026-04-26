@@ -224,13 +224,16 @@ export function WorkspaceShell() {
         </div>
       </div>
       <aside className={`rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-xl shadow-slate-200/40 dark:border-slate-800 dark:bg-slate-900/70 dark:shadow-slate-950/20 ${mobileNavOpen ? 'block' : 'hidden'} lg:block`}>
-        <div className="mb-3 flex items-center gap-3 rounded-xl border border-cyan-500/20 bg-gradient-to-r from-cyan-50 to-indigo-50 px-3 py-2 dark:bg-slate-950/80">
+        <div className="mb-3 flex items-center gap-3 rounded-xl border border-cyan-500/20 bg-gradient-to-r from-cyan-50 to-indigo-50 px-3 py-2 dark:border-slate-700 dark:from-slate-900 dark:to-slate-800">
           <div className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-cyan-500 to-indigo-500 text-sm font-bold text-white">
             BC
           </div>
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">Brandochat</p>
-            <p className="truncate text-[11px] text-slate-500 dark:text-slate-400">Brandovise team inbox</p>
+            <p className="truncate text-sm font-semibold">
+              <span className="text-cyan-600 dark:text-cyan-300">Brando</span>
+              <span className="text-indigo-600 dark:text-indigo-300">chat</span>
+            </p>
+            <p className="truncate text-[11px] text-slate-500 dark:text-slate-500">Brandovise team inbox</p>
           </div>
         </div>
         <div className="mb-4 rounded-xl bg-slate-100 p-3 dark:bg-slate-950/60">

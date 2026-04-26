@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { waInstances, waSendMessage, waSyncChat, type WhatsAppInstance } from '../lib/api'
+import { waFetchMediaBlobUrl, waInstances, waSendMessage, waSyncChat, type WhatsAppInstance } from '../lib/api'
 import { supabase } from '../lib/supabase'
 import { useWorkspaceId } from '../shared/hooks/useWorkspaceId'
 import { Button } from '../shared/ui/button'
@@ -117,6 +117,14 @@ function senderFromRaw(message: MessageEvent): string {
   return typeof participant === 'string' ? participant : ''
 }
 
+function normalizeJid(value: string): string {
+  return value.trim().toLowerCase()
+}
+
+function phoneFromJid(value: string): string {
+  return value.split('@')[0]?.replace(/\D/g, '') ?? ''
+}
+
 function unwrapRawMessage(message: unknown): Record<string, unknown> | null {
   if (!message || typeof message !== 'object' || Array.isArray(message)) return null
   const m = message as Record<string, unknown>
@@ -136,10 +144,6 @@ function mediaFromRaw(message: MessageEvent): MessageMedia | null {
   const video = content.videoMessage as { caption?: string; url?: string } | undefined
   if (video) return { kind: 'video', caption: video.caption ?? null, url: video.url ?? null }
   return null
-}
-
-function mediaProxyUrl(workspaceId: string, messageEventId: string): string {
-  return `/api/wa/${workspaceId}/media/${messageEventId}`
 }
 
 function ContactIdWithHoverJid({ contact, className = '' }: { contact: Contact; className?: string }) {
@@ -176,6 +180,7 @@ export default function ChatsPage() {
   const [labels, setLabels] = useState<WorkspaceLabel[]>([])
   const [conversationLabels, setConversationLabels] = useState<ConversationLabel[]>([])
   const [mobileConversationOpen, setMobileConversationOpen] = useState(false)
+  const [mediaBlobUrls, setMediaBlobUrls] = useState<Record<string, string>>({})
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
 
   function scrollToBottom(behavior: ScrollBehavior = 'smooth') {
@@ -188,6 +193,21 @@ export default function ChatsPage() {
     () => contacts.find((contact) => contact.id === selectedContactId) ?? null,
     [contacts, selectedContactId],
   )
+  const contactNameByJid = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const contact of contacts) {
+      const label = contactLabel(contact)
+      if (!label) continue
+      map.set(normalizeJid(contact.wa_jid), label)
+      const lid = contact.metadata?.wa_lid
+      if (typeof lid === 'string' && lid.trim()) map.set(normalizeJid(lid), label)
+      const alt = contact.metadata?.wa_jid_alt
+      if (typeof alt === 'string' && alt.trim()) map.set(normalizeJid(alt), label)
+      const phone = contact.phone_e164?.replace(/\D/g, '') ?? phoneFromJid(contact.wa_jid)
+      if (phone) map.set(phone, label)
+    }
+    return map
+  }, [contacts])
   const labelById = useMemo(() => new Map(labels.map((label) => [label.id, label])), [labels])
 
   function labelsForContact(contactId: string | null): WorkspaceLabel[] {
@@ -386,6 +406,59 @@ export default function ChatsPage() {
     if (!selectedContactId || messages.length === 0) return
     scrollToBottom()
   }, [messages.length, selectedContactId])
+
+  useEffect(() => {
+    if (!workspaceId) return
+    let cancelled = false
+    const pending = visibleMessages
+      .filter((message) => {
+        const media = mediaFromRaw(message)
+        return Boolean(media && (media.kind === 'image' || media.kind === 'video') && !mediaBlobUrls[message.id])
+      })
+      .map((message) => message.id)
+    if (pending.length === 0) return
+
+    void Promise.all(
+      pending.map(async (messageId) => {
+        try {
+          const url = await waFetchMediaBlobUrl(workspaceId, messageId)
+          return [messageId, url] as const
+        } catch {
+          return null
+        }
+      }),
+    ).then((entries) => {
+      if (cancelled) {
+        for (const entry of entries) {
+          if (entry?.[1]) URL.revokeObjectURL(entry[1])
+        }
+        return
+      }
+      setMediaBlobUrls((current) => {
+        const next = { ...current }
+        for (const entry of entries) {
+          if (!entry) continue
+          const [messageId, url] = entry
+          if (next[messageId]) {
+            URL.revokeObjectURL(url)
+            continue
+          }
+          next[messageId] = url
+        }
+        return next
+      })
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [mediaBlobUrls, visibleMessages, workspaceId])
+
+  useEffect(() => {
+    return () => {
+      Object.values(mediaBlobUrls).forEach((url) => URL.revokeObjectURL(url))
+    }
+  }, [mediaBlobUrls])
 
   useEffect(() => {
     if (!workspaceId || !conversationSearch.trim()) {
@@ -804,6 +877,10 @@ export default function ChatsPage() {
                 {visibleMessages.map((message) => {
                   const media = mediaFromRaw(message)
                   const isMediaPlaceholder = message.body === '[image]' || message.body === '[video]'
+                  const participantJid = senderFromRaw(message)
+                  const participantName =
+                    contactNameByJid.get(normalizeJid(participantJid)) ||
+                    contactNameByJid.get(phoneFromJid(participantJid))
                   return (
                   <div key={message.id} className={`flex ${message.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}>
                     <div
@@ -817,9 +894,9 @@ export default function ChatsPage() {
                         <div className="mb-2 space-y-1">
                           <p className="text-[11px] font-medium uppercase tracking-wide opacity-80">{media.kind}</p>
                           {media.kind === 'image' ? (
-                            <a href={mediaProxyUrl(workspaceId, message.id)} target="_blank" rel="noreferrer">
+                            <a href={mediaBlobUrls[message.id] ?? '#'} target="_blank" rel="noreferrer">
                               <img
-                                src={mediaProxyUrl(workspaceId, message.id)}
+                                src={mediaBlobUrls[message.id] ?? ''}
                                 alt="WhatsApp media"
                                 className="max-h-56 rounded-lg border border-black/10 object-contain"
                                 loading="lazy"
@@ -827,7 +904,7 @@ export default function ChatsPage() {
                             </a>
                           ) : media.kind === 'video' ? (
                             <video controls preload="metadata" className="max-h-64 rounded-lg border border-black/10">
-                              <source src={mediaProxyUrl(workspaceId, message.id)} />
+                              <source src={mediaBlobUrls[message.id] ?? ''} />
                             </video>
                           ) : media.url ? (
                             <a href={media.url} target="_blank" rel="noreferrer" className="text-xs underline underline-offset-2 opacity-90">
@@ -839,8 +916,11 @@ export default function ChatsPage() {
                           {media.caption ? <p className="whitespace-pre-wrap">{media.caption}</p> : null}
                         </div>
                       ) : null}
-                      {isGroup(selectedContact) && senderFromRaw(message) && message.direction === 'inbound' ? (
-                        <p className="mb-1 font-mono text-[10px] text-sky-300">{senderFromRaw(message)}</p>
+                      {isGroup(selectedContact) && participantJid && message.direction === 'inbound' ? (
+                        <p className="mb-1 text-[10px] text-sky-300">
+                          <span className="font-medium">{participantName ?? participantJid}</span>
+                          {participantName ? <span className="ml-1 font-mono opacity-80">({participantJid})</span> : null}
+                        </p>
                       ) : null}
                       {message.body && !(media && isMediaPlaceholder) ? <p className="whitespace-pre-wrap">{message.body}</p> : null}
                       <p

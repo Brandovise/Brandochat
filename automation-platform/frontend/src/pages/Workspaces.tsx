@@ -40,23 +40,23 @@ export default function Workspaces() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold text-white">Workspaces</h1>
-        <p className="mt-1 text-slate-400">Each workspace has its own WhatsApp session, contacts, and automations.</p>
+        <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Workspaces</h1>
+        <p className="mt-1 text-slate-600 dark:text-slate-400">Each workspace has its own WhatsApp session, contacts, and automations.</p>
       </div>
 
-      <form onSubmit={create} className="flex max-w-xl flex-col gap-3 rounded-xl border border-slate-800 bg-slate-900/40 p-4 sm:flex-row sm:items-end">
+      <form onSubmit={create} className="flex max-w-xl flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900/40 sm:flex-row sm:items-end">
         <label className="min-w-0 flex-1 text-sm">
-          <span className="text-slate-400">New workspace name</span>
+          <span className="text-slate-600 dark:text-slate-400">New workspace name</span>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g. Sales team"
-            className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500/50 focus:ring-2"
+            className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none ring-cyan-500/50 focus:ring-2 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
           />
         </label>
         <button
           type="submit"
-          className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
+          className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-500"
         >
           Create
         </button>
@@ -73,9 +73,9 @@ export default function Workspaces() {
             <li key={w.id}>
               <Link
                 to={`/w/${w.id}`}
-                className="block rounded-xl border border-slate-800 bg-slate-900/60 p-4 transition hover:border-emerald-500/40 hover:bg-slate-900"
+                className="block rounded-xl border border-slate-200 bg-white p-4 transition hover:border-cyan-500/40 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900/60 dark:hover:bg-slate-900"
               >
-                <h2 className="font-medium text-white">{w.name}</h2>
+                <h2 className="font-medium text-slate-900 dark:text-white">{w.name}</h2>
                 <p className="mt-1 text-xs text-slate-500">{w.id}</p>
               </Link>
             </li>

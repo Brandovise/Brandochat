@@ -14,7 +14,7 @@ export default function WorkspaceHome() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-white">Workspace</h1>
+        <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Workspace</h1>
         <p className="mt-1 font-mono text-xs text-slate-500">{workspaceId}</p>
       </div>
       <ul className="grid gap-3 sm:grid-cols-2">
@@ -22,10 +22,10 @@ export default function WorkspaceHome() {
           <li key={c.to}>
             <Link
               to={c.to}
-              className="block rounded-xl border border-slate-800 bg-slate-900/50 p-4 hover:border-emerald-500/30"
+              className="block rounded-xl border border-slate-200 bg-white p-4 hover:border-cyan-500/30 dark:border-slate-800 dark:bg-slate-900/50"
             >
-              <h2 className="font-medium text-emerald-300">{c.title}</h2>
-              <p className="mt-1 text-sm text-slate-400">{c.desc}</p>
+              <h2 className="font-medium text-cyan-600 dark:text-cyan-300">{c.title}</h2>
+              <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{c.desc}</p>
             </Link>
           </li>
         ))}

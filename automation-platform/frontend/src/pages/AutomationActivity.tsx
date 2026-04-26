@@ -52,20 +52,26 @@ export default function AutomationActivity() {
   const [rows, setRows] = useState<AutomationRun[]>([])
   const [error, setError] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [page, setPage] = useState(0)
+  const [total, setTotal] = useState(0)
+  const PAGE_SIZE = 25
 
   useEffect(() => {
     if (!workspaceId) return
     void supabase
       .from('automation_runs')
-      .select('id, automation_id, contact_id, conversation_id, status, trigger_type, trigger_payload, current_node_id, variables, error, started_at, completed_at, updated_at, automations(name), contacts(display_name, wa_jid)')
+      .select('id, automation_id, contact_id, conversation_id, status, trigger_type, trigger_payload, current_node_id, variables, error, started_at, completed_at, updated_at, automations(name), contacts(display_name, wa_jid)', { count: 'exact' })
       .eq('workspace_id', workspaceId)
       .order('started_at', { ascending: false })
-      .limit(100)
-      .then(({ data, error: loadErr }) => {
+      .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
+      .then(({ data, count, error: loadErr }) => {
         if (loadErr) setError(loadErr.message)
-        else setRows((data as AutomationRun[]) ?? [])
+        else {
+          setRows((data as AutomationRun[]) ?? [])
+          setTotal(count ?? 0)
+        }
       })
-  }, [workspaceId])
+  }, [workspaceId, page])
 
   if (!workspaceId) return <p className="text-slate-500">Missing workspace.</p>
 
@@ -81,6 +87,27 @@ export default function AutomationActivity() {
         </Link>
       </div>
       <FormError message={error} />
+      <div className="flex items-center gap-2 text-xs">
+        <button
+          type="button"
+          disabled={page === 0}
+          onClick={() => setPage((current) => Math.max(0, current - 1))}
+          className="rounded border border-slate-300 px-2 py-1 text-slate-700 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300"
+        >
+          Prev
+        </button>
+        <span className="text-slate-500">
+          Page {page + 1} / {Math.max(1, Math.ceil(total / PAGE_SIZE))}
+        </span>
+        <button
+          type="button"
+          disabled={(page + 1) * PAGE_SIZE >= total}
+          onClick={() => setPage((current) => current + 1)}
+          className="rounded border border-slate-300 px-2 py-1 text-slate-700 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300"
+        >
+          Next
+        </button>
+      </div>
 
       <div className="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1 text-sm dark:border-slate-800 dark:bg-slate-950/60">
         <Link to={`/w/${workspaceId}/automations`} className="rounded-lg px-3 py-1.5 text-slate-600 dark:text-slate-400">

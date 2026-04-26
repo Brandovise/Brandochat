@@ -77,13 +77,13 @@ export default function AccountSettings() {
         </Button>
       </div>
       <FormError message={error} />
-      {saved ? <p className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">Profile saved.</p> : null}
+      {saved ? <p className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-700 dark:text-cyan-300">Profile saved.</p> : null}
 
-      <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5">
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900/50">
         <form onSubmit={saveProfile} className="space-y-4">
           <div>
-            <h2 className="text-lg font-semibold text-white">Profile</h2>
-            <p className="mt-1 text-sm text-slate-400">{user?.email}</p>
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Profile</h2>
+            <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{user?.email}</p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <FormField label="Display name">
@@ -97,16 +97,16 @@ export default function AccountSettings() {
         </form>
       </section>
 
-      <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5">
-        <h2 className="text-lg font-semibold text-white">Your workspaces</h2>
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900/50">
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Your workspaces</h2>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {workspaces.map((workspace) => (
             <Link
               key={workspace.id}
               to={`/w/${workspace.id}/chats`}
-              className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 transition hover:border-emerald-500/50"
+              className="rounded-xl border border-slate-200 bg-slate-50 p-4 transition hover:border-cyan-500/50 dark:border-slate-800 dark:bg-slate-950/60"
             >
-              <p className="font-medium text-white">{workspace.name}</p>
+              <p className="font-medium text-slate-900 dark:text-white">{workspace.name}</p>
               <p className="mt-1 font-mono text-xs text-slate-500">{workspace.slug ?? workspace.id}</p>
             </Link>
           ))}

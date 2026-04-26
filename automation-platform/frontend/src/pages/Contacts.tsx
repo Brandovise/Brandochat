@@ -825,7 +825,7 @@ export default function ContactsPage() {
             <Button type="submit">Create list</Button>
           </form>
           {lists.length === 0 ? <p className="text-sm text-slate-500">No lists yet.</p> : null}
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid gap-2">
             {lists.map((list) => {
               const count = listMemberships.filter((member) => member.list_id === list.id).length
               return (
@@ -878,7 +878,7 @@ export default function ContactsPage() {
             <Button type="submit">Create tag</Button>
           </form>
           {tags.length === 0 ? <p className="text-sm text-slate-500">No tags yet.</p> : null}
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid gap-2">
             {tags.map((tag) => {
               const count = tagMemberships.filter((member) => member.tag_id === tag.id).length
               return (
