@@ -1,145 +1,50 @@
-# BrandoChat Automation Platform
+# BrandoChat
 
-BrandoChat is a WhatsApp-first customer communication and automation platform built with:
+BrandoChat is an open-source WhatsApp team workspace and automation platform.
 
-- **Frontend**: React + Vite + Tailwind + Supabase JS
-- **Backend**: Node.js + Express + Baileys + Supabase Service Role
-- **Database**: Supabase Postgres with RLS + SQL migrations
-- **AI**: OpenAI/ChatGPT API for reply routing and automation skills
+Website: [brandochat.com](https://brandochat.com)  
+Website repo: [brandovise25/brandochat-website](https://github.com/brandovise25/brandochat-website)
 
-It is designed for teams that want a single workspace to:
+## Our aim
 
-- manage WhatsApp conversations at scale,
-- assign chats to teammates,
-- automate actions/replies,
-- connect external systems (Calendly, ChatGPT API, custom integrations),
-- and keep a complete event/log trail.
+We are building BrandoChat so everybody can automate repetitive communication work and collaborate in teams from one shared inbox.
 
----
+Core idea:
+- connect multiple WhatsApp numbers into one workspace,
+- let teams work together (sales, support, ops),
+- automate repetitive tasks and follow-ups,
+- integrate with external tools via webhooks and connectors.
 
-## What this project can do
+## What we are building
 
-### Inbox and conversation management
+- Shared inbox with assignment, labels, status, unread views
+- Contact management with tags, lists, and custom fields
+- WhatsApp session management using Baileys
+- Automation builder with triggers, conditions, routing, delay, actions
+- Integration layer (Calendly, webhooks, and upcoming connectors)
+- Activity logs and execution traces for team visibility
 
-- Unified inbox with:
-  - all conversations,
-  - assigned-to-me,
-  - unread views.
-- Contact-centric chat timeline with inbound/outbound message history.
-- Manual and automatic read/unread handling.
-- Assign chats to team members.
-- Labels and status updates on conversations.
+## Current stack
 
-### Contact management
+- **Frontend**: React + Vite + Supabase JS
+- **Backend**: Node.js + Express + Baileys
+- **Database**: Supabase Postgres + SQL migrations
+- **Automation/AI**: rule engine + optional OpenAI integration
 
-- Create/edit contacts with WhatsApp JID, phone, names, notes.
-- Store rich custom attributes (string/date/datetime/url/integer).
-- Organize contacts with:
-  - **Lists**
-  - **Tags**
-- Bulk add selected contacts to lists/tags.
+## How BrandoChat works (high level)
 
-### WhatsApp integration (Baileys)
+1. Messages arrive from connected WhatsApp accounts.
+2. Conversations are stored and shown in a shared team inbox.
+3. Team members can assign, reply, update status, and collaborate.
+4. Automations can trigger actions (routing, updates, follow-ups, webhooks).
+5. Logs keep all activity traceable.
 
-- Multi-instance WhatsApp support per workspace.
-- Connect/disconnect sessions and monitor pairing state.
-- Sync chat history and contact/message metadata.
-- Send outbound WhatsApp messages via backend socket layer.
+## Repository structure
 
-### Automation engine
-
-- Trigger-based automation execution:
-  - message/conversation triggers,
-  - webhook triggers,
-  - calendly event triggers.
-- Graph-based workflow builder with nodes like:
-  - send template,
-  - condition,
-  - branch/AI routing,
-  - update contact,
-  - assign conversation,
-  - delay,
-  - webhook response,
-  - AI skill.
-- Automation activity and execution trace visibility.
-
-### Integrations
-
-- Card-based integrations UX.
-- Calendly integration:
-  - token setup,
-  - webhook subscription creation,
-  - event ingestion,
-  - logs and event monitoring.
-- ChatGPT API integration settings:
-  - api key,
-  - base URL,
-  - model.
-- Extensible integration schema for future providers.
-
----
-
-## Baileys / WhatsApp socket architecture
-
-This project uses **Baileys** (from WhiskeySockets) as the WhatsApp Web protocol client in the backend.
-
-At a high level:
-
-1. Backend creates and maintains WhatsApp socket sessions per workspace instance.
-2. Incoming WhatsApp events are normalized and written into Supabase (`message_events`, contact metadata updates, conversation state updates).
-3. Outbound sends are executed through Baileys socket methods from backend routes/automation nodes.
-4. Session auth files are stored on disk under `WA_AUTH_ROOT` (not in Supabase).
-
-Important operational note:
-
-- Supabase stores conversation/contact/message records and instance metadata.
-- **Baileys auth/session keys are filesystem-based** and must be persisted as volume data in production.
-- If you migrate servers and do not copy `WA_AUTH_ROOT`, sessions must be paired again.
-
-References:
-
-- [Baileys GitHub repository](https://github.com/WhiskeySockets/Baileys)
-- [Baileys documentation site](https://baileys.wiki/)
-
----
-
-## Repository layout
-
-- `automation-platform/frontend` – React application
-- `automation-platform/backend` – Express API + Baileys + automation engine
-- `supabase/migrations` – database schema and feature migrations
-- `docker-compose.yml` – deployment composition for frontend/backend
-
----
-
-## Key data model highlights
-
-- Workspace and team:
-  - `workspaces`
-  - `workspace_members`
-  - `workspace_invitations`
-- Conversations:
-  - `contacts`
-  - `conversations`
-  - `message_events`
-- Organization:
-  - `workspace_labels`
-  - `conversation_labels`
-  - `workspace_contact_lists`
-  - `contact_list_members`
-  - `workspace_contact_tags`
-  - `contact_tag_members`
-- Integrations:
-  - `workspace_integrations`
-  - `workspace_integration_logs`
-  - `workspace_calendly_webhooks`
-  - `calendly_webhook_events`
-- Automation:
-  - `automations`
-  - `automation_runs`
-  - `webhook_triggers`
-
----
+- `automation-platform/frontend` - React app
+- `automation-platform/backend` - Express API, WhatsApp socket runtime, automations
+- `supabase/migrations` - schema and migration history
+- `docker-compose.yml` - local/prod-style composition
 
 ## Local development
 
@@ -148,42 +53,39 @@ References:
 - Node.js 20+ (22 recommended)
 - npm
 - Supabase CLI
-- Access to your Supabase project
+- Supabase project access
 
-### 1) Install dependencies
+### Install dependencies
 
 ```bash
 cd automation-platform/backend && npm install
 cd ../frontend && npm install
 ```
 
-### 2) Configure environment
+### Configure environment
 
-Backend env file:
-
+Backend file:
 - `automation-platform/backend/.env`
 
-Required keys:
-
+Required backend keys:
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
-- `OPENAI_API_KEY` (optional for non-AI flows)
+- `WA_AUTH_ROOT` (optional, default `./data/wa_sessions`)
+- `OPENAI_API_KEY` (optional)
 - `OPENAI_MODEL` (optional)
-- `WA_AUTH_ROOT` (optional, defaults to `./data/wa_sessions`)
 
-Frontend uses:
-
+Frontend keys:
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
 
-### 3) Apply database migrations
+### Run migrations
 
 ```bash
 supabase db push
 ```
 
-### 4) Run backend and frontend
+### Start app
 
 ```bash
 # backend
@@ -195,112 +97,157 @@ cd automation-platform/frontend
 npm run dev
 ```
 
----
-
-## Docker deployment (frontend + backend)
-
-This repo includes:
-
-- `docker-compose.yml`
-- `automation-platform/backend/Dockerfile`
-- `automation-platform/frontend/Dockerfile`
-- Nginx config for frontend `/api` proxying to backend.
-
-### 1) Configure root `.env`
-
-Create root `.env` (for compose build args) from `.env.example`:
-
-- `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_ANON_KEY`
-
-Backend secrets stay in:
-
-- `automation-platform/backend/.env`
-
-### 2) Build and run
+## Docker
 
 ```bash
 docker compose up -d --build
 ```
 
-### 3) Endpoints
-
+Default endpoints:
 - Frontend: `http://localhost:5173`
 - Backend: `http://localhost:3847`
 
-### 4) Persisting WhatsApp sessions
+## Production deployment guide
 
-`docker-compose.yml` mounts a named volume for:
+This section covers the minimum setup to deploy BrandoChat with Supabase + Docker Compose.
 
-- `/app/data/wa_sessions`
+### 1) Supabase project setup
 
-Back up/restore this volume when moving servers to keep paired sessions alive.
+1. Create or select your Supabase project.
+2. Copy these values from Supabase project settings:
+   - `Project URL` -> `SUPABASE_URL` / `VITE_SUPABASE_URL`
+   - `anon public key` -> `SUPABASE_ANON_KEY` / `VITE_SUPABASE_ANON_KEY`
+   - `service_role key` -> `SUPABASE_SERVICE_ROLE_KEY` (backend only)
+3. Ensure the target DB is the one your app will use in production.
 
----
+### 2) Apply migrations to Supabase
 
-## Security and secret handling
-
-- Service role keys and OpenAI keys are backend-only.
-- Frontend should only use public Supabase anon credentials.
-- `.gitignore` excludes sensitive files, env files, keys/certs, and auth/session data.
-- Do not commit:
-  - `.env*` secrets
-  - service account JSON files
-  - TLS private keys
-  - Baileys session directories.
-
----
-
-## Troubleshooting
-
-### Error: `Could not find the table 'public.workspace_contact_lists' in the schema cache`
-
-Cause:
-
-- Migrations were not applied to the connected Supabase project.
-
-Fix:
+From repository root:
 
 ```bash
+supabase link --project-ref <your-project-ref>
 supabase db push
 ```
 
-Then refresh the app.
+If `supabase db push` fails, fix the error before deploying app containers.
 
-### WhatsApp shows disconnected after server migration
+### 3) Configure environment files
 
-Cause:
+#### A) Root `.env` (used by Docker Compose / frontend build args)
 
-- `WA_AUTH_ROOT` files were not copied to new host/volume.
+Create `/home/jibran-shahid/Work/Documents/GitHub_Work/202604_Superchat_OpenSouurce/.env`:
 
-Fix:
+```env
+VITE_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
+```
 
-- Restore/copy session folder to mounted volume path.
-- Ensure one backend process owns a given session at a time.
+#### B) Backend `.env` (server/runtime secrets)
 
-### Calendly webhook not processing
+Create `/home/jibran-shahid/Work/Documents/GitHub_Work/202604_Superchat_OpenSouurce/automation-platform/backend/.env`:
 
-Check:
+```env
+SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY=YOUR_SUPABASE_SERVICE_ROLE_KEY
 
-- token saved correctly,
-- webhook callback URL is reachable,
-- signing key matches,
-- events/scope are valid for Calendly API.
+# WhatsApp session storage path inside backend container/runtime
+WA_AUTH_ROOT=./data/wa_sessions
 
-Inspect:
+# Optional AI settings
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-4o-mini
+```
 
-- integration logs in UI,
-- `calendly_webhook_events` table.
+Notes:
+- `SUPABASE_SERVICE_ROLE_KEY` must stay backend-only.
+- Do not expose backend `.env` in frontend builds.
 
----
+### 4) Deploy with Docker Compose
 
-## Current status
+From repository root:
 
-This is an actively evolving platform with rapid iteration across:
+```bash
+docker compose up -d --build
+```
 
-- inbox UX,
-- automation capabilities,
-- integrations,
-- and deployment hardening.
+Check status/logs:
 
-If you are deploying to production, run migrations first, verify environment variables, and test one WhatsApp instance end-to-end before scaling.
+```bash
+docker compose ps
+docker compose logs -f backend
+docker compose logs -f frontend
+```
+
+### 5) Post-deploy checklist
+
+- Open frontend (`http://localhost:5173` or your domain).
+- Verify backend health/API routes (`http://localhost:3847`).
+- Test login/workspace access.
+- Pair one WhatsApp instance and send/receive test messages.
+- Trigger one automation and confirm run logs.
+
+## In-app onboarding: what to accept
+
+When setting up BrandoChat in the app UI, these are the main confirmations/permissions to accept:
+
+1. **Workspace setup**
+   - Create/select your workspace.
+   - Confirm teammate access and roles for team collaboration.
+
+2. **WhatsApp connection (Baileys pairing)**
+   - Pair the WhatsApp account by scanning QR.
+   - Confirm Linked Devices approval on the phone.
+   - Keep session storage persistent (`WA_AUTH_ROOT`) so pairing remains active.
+
+3. **Integration permissions**
+   - **Calendly**: approve webhook/token permissions needed for events.
+   - **Webhooks**: allow your endpoint URLs and verify signatures/secrets.
+   - **OpenAI (optional)**: add API key and model only if AI features are required.
+
+4. **Automation safety confirmations**
+   - Start with one test flow first.
+   - Validate trigger conditions and recipients before enabling full automation.
+   - Keep logs enabled and monitor first production runs.
+
+5. **Compliance and usage confirmations**
+   - Use responsibly and follow local regulations/platform policies.
+   - Avoid spam or abusive bulk messaging behavior.
+
+### 6) Persistence and backups
+
+- Persist WhatsApp auth/session data (`WA_AUTH_ROOT`) using durable volume/storage.
+- Back up this data before host migration.
+- If auth data is lost, WhatsApp instances must be paired again.
+
+### 7) Updating production
+
+```bash
+git pull
+supabase db push
+docker compose up -d --build
+```
+
+Run migrations before or during deploy window to avoid schema drift.
+
+## Important implementation notes
+
+- BrandoChat uses **Baileys** for WhatsApp Web protocol integration.
+- This is **not** WhatsApp Business API (WABA) usage.
+- Persist `WA_AUTH_ROOT` storage when moving servers, or sessions must be re-paired.
+- Use responsibly and comply with local regulations and platform policies.
+
+## Security basics
+
+- Keep service keys backend-only.
+- Never commit `.env` secrets or session/auth directories.
+- Persist and protect WhatsApp auth state storage.
+
+## Project status
+
+BrandoChat is actively evolving. Some modules are production-ready, others are still being expanded.
+
+If you deploy to production:
+- apply migrations first,
+- verify env vars,
+- test one full WhatsApp flow end-to-end before scaling.

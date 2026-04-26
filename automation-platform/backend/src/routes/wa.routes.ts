@@ -5,9 +5,9 @@ import { parseGraph } from '../flow/graphRuntime.js'
 import { executeAutomationRun } from '../flow/runAutomation.js'
 import type { AutomationRunRow } from '../flow/types.js'
 import { asyncHandler } from '../http/async-handler.js'
-import { getServiceRoleClient } from '../lib/supabase-clients.js'
+import { createUserClient } from '../lib/supabase-clients.js'
 import { requireWorkspaceMember } from '../middleware/workspace-auth.middleware.js'
-import { readWorkspaceId } from '../types/express.js'
+import { readWorkspaceId, type AuthenticatedWorkspaceRequest } from '../types/express.js'
 import { resolveConversation } from '../wa/conversations.js'
 import {
   disconnectWorkspace,
@@ -25,9 +25,9 @@ function readSettings(raw: unknown): Record<string, unknown> {
   return raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {}
 }
 
-async function getOrCreateDefaultInstance(workspaceId: string) {
-  const admin = getServiceRoleClient()
-  const { data: existing } = await admin
+async function getOrCreateDefaultInstance(workspaceId: string, accessToken: string) {
+  const db = createUserClient(accessToken)
+  const { data: existing } = await db
     .from('whatsapp_instances')
     .select('id, display_name, pairing_status, phone_label, last_error, is_default, created_at, settings')
     .eq('workspace_id', workspaceId)
@@ -36,7 +36,7 @@ async function getOrCreateDefaultInstance(workspaceId: string) {
 
   if (existing) return existing
 
-  const { data: first } = await admin
+  const { data: first } = await db
     .from('whatsapp_instances')
     .select('id, display_name, pairing_status, phone_label, last_error, is_default, created_at, settings')
     .eq('workspace_id', workspaceId)
@@ -45,11 +45,11 @@ async function getOrCreateDefaultInstance(workspaceId: string) {
     .maybeSingle()
 
   if (first) {
-    await admin.from('whatsapp_instances').update({ is_default: true }).eq('id', first.id)
+    await db.from('whatsapp_instances').update({ is_default: true }).eq('id', first.id)
     return { ...first, is_default: true }
   }
 
-  const { data: created, error } = await admin
+  const { data: created, error } = await db
     .from('whatsapp_instances')
     .insert({
       workspace_id: workspaceId,
@@ -78,9 +78,10 @@ export function createWaRouter(): Router {
   router.get(
     '/instances',
     asyncHandler(async (req, res) => {
+      const authed = req as AuthenticatedWorkspaceRequest
       const workspaceId = readWorkspaceId(req)
-      const admin = getServiceRoleClient()
-      const { data, error } = await admin
+      const db = createUserClient(authed.accessToken)
+      const { data, error } = await db
         .from('whatsapp_instances')
         .select('id, display_name, pairing_status, phone_label, last_error, is_default, created_at, settings')
         .eq('workspace_id', workspaceId)
@@ -111,15 +112,16 @@ export function createWaRouter(): Router {
   router.post(
     '/instances',
     asyncHandler(async (req, res) => {
+      const authed = req as AuthenticatedWorkspaceRequest
       const workspaceId = readWorkspaceId(req)
       const body = req.body as { displayName?: string }
-      const admin = getServiceRoleClient()
-      const { count } = await admin
+      const db = createUserClient(authed.accessToken)
+      const { count } = await db
         .from('whatsapp_instances')
         .select('id', { count: 'exact', head: true })
         .eq('workspace_id', workspaceId)
 
-      const { data, error } = await admin
+      const { data, error } = await db
         .from('whatsapp_instances')
         .insert({
           workspace_id: workspaceId,
@@ -142,11 +144,12 @@ export function createWaRouter(): Router {
   router.post(
     '/instances/:instanceId/settings',
     asyncHandler(async (req, res) => {
+      const authed = req as AuthenticatedWorkspaceRequest
       const workspaceId = readWorkspaceId(req)
       const instanceId = String(req.params.instanceId)
       const body = req.body as { always_sync_history?: boolean; skip_phone_notifications?: boolean }
-      const admin = getServiceRoleClient()
-      const { data: current, error: currentErr } = await admin
+      const db = createUserClient(authed.accessToken)
+      const { data: current, error: currentErr } = await db
         .from('whatsapp_instances')
         .select('settings')
         .eq('workspace_id', workspaceId)
@@ -161,7 +164,7 @@ export function createWaRouter(): Router {
         always_sync_history: body.always_sync_history !== false,
         skip_phone_notifications: body.skip_phone_notifications === true,
       }
-      const { error: updateErr } = await admin.from('whatsapp_instances').update({ settings }).eq('id', instanceId)
+      const { error: updateErr } = await db.from('whatsapp_instances').update({ settings }).eq('id', instanceId)
       if (updateErr) throw new Error(updateErr.message)
       res.json({ ok: true, settings })
     }),
@@ -206,9 +209,10 @@ export function createWaRouter(): Router {
   router.post(
     '/instances/:instanceId/chats/:contactId/sync',
     asyncHandler(async (req, res) => {
+      const authed = req as AuthenticatedWorkspaceRequest
       const workspaceId = readWorkspaceId(req)
-      const admin = getServiceRoleClient()
-      const { data: contact, error: contactError } = await admin
+      const db = createUserClient(authed.accessToken)
+      const { data: contact, error: contactError } = await db
         .from('contacts')
         .select('wa_jid')
         .eq('workspace_id', workspaceId)
@@ -243,10 +247,11 @@ export function createWaRouter(): Router {
   router.get(
     '/media/:messageEventId',
     asyncHandler(async (req, res) => {
+      const authed = req as AuthenticatedWorkspaceRequest
       const workspaceId = readWorkspaceId(req)
       const messageEventId = String(req.params.messageEventId)
-      const admin = getServiceRoleClient()
-      const { data: eventRow, error } = await admin
+      const db = createUserClient(authed.accessToken)
+      const { data: eventRow, error } = await db
         .from('message_events')
         .select('raw')
         .eq('workspace_id', workspaceId)
@@ -298,8 +303,9 @@ export function createWaRouter(): Router {
   router.post(
     '/connect',
     asyncHandler(async (req, res) => {
+      const authed = req as AuthenticatedWorkspaceRequest
       const workspaceId = readWorkspaceId(req)
-      const instance = await getOrCreateDefaultInstance(workspaceId)
+      const instance = await getOrCreateDefaultInstance(workspaceId, authed.accessToken)
       await ensureWorkspaceSocket(workspaceId, instance.id as string)
       res.json({ ok: true })
     }),
@@ -308,8 +314,9 @@ export function createWaRouter(): Router {
   router.get(
     '/status',
     asyncHandler(async (req, res) => {
+      const authed = req as AuthenticatedWorkspaceRequest
       const workspaceId = readWorkspaceId(req)
-      const instance = await getOrCreateDefaultInstance(workspaceId)
+      const instance = await getOrCreateDefaultInstance(workspaceId, authed.accessToken)
       const session = getSession(instance.id as string)
       const qr = getQr(instance.id as string)
       res.json({
@@ -324,8 +331,9 @@ export function createWaRouter(): Router {
   router.post(
     '/disconnect',
     asyncHandler(async (req, res) => {
+      const authed = req as AuthenticatedWorkspaceRequest
       const workspaceId = readWorkspaceId(req)
-      const instance = await getOrCreateDefaultInstance(workspaceId)
+      const instance = await getOrCreateDefaultInstance(workspaceId, authed.accessToken)
       await disconnectWorkspace(instance.id as string)
       res.json({ ok: true })
     }),
@@ -334,6 +342,7 @@ export function createWaRouter(): Router {
   router.post(
     '/send',
     asyncHandler(async (req, res) => {
+      const authed = req as AuthenticatedWorkspaceRequest
       const workspaceId = readWorkspaceId(req)
       const body = req.body as { contactId?: string; text?: string; instanceId?: string }
       const contactId = body.contactId?.trim()
@@ -344,8 +353,8 @@ export function createWaRouter(): Router {
         return
       }
 
-      const admin = getServiceRoleClient()
-      const { data: contact, error: contactError } = await admin
+      const db = createUserClient(authed.accessToken)
+      const { data: contact, error: contactError } = await db
         .from('contacts')
         .select('id, wa_jid, metadata')
         .eq('workspace_id', workspaceId)
@@ -358,7 +367,7 @@ export function createWaRouter(): Router {
       }
 
       const sentAt = new Date().toISOString()
-      const conversation = await resolveConversation(admin, {
+      const conversation = await resolveConversation(db, {
         workspaceId,
         contactId: contact.id as string,
         contactJid: contact.wa_jid as string,
@@ -382,7 +391,7 @@ export function createWaRouter(): Router {
         throw error
       }
 
-      await admin.from('message_events').insert({
+      await db.from('message_events').insert({
         workspace_id: workspaceId,
         whatsapp_instance_id: body.instanceId ?? null,
         contact_id: contact.id,
@@ -398,7 +407,7 @@ export function createWaRouter(): Router {
         contact.metadata && typeof contact.metadata === 'object' && !Array.isArray(contact.metadata)
           ? (contact.metadata as Record<string, unknown>)
           : {}
-      await admin
+      await db
         .from('contacts')
         .update({
           metadata: {
@@ -416,6 +425,7 @@ export function createWaRouter(): Router {
   router.post(
     '/automations/:automationId/test-run',
     asyncHandler(async (req, res) => {
+      const authed = req as AuthenticatedWorkspaceRequest
       const workspaceId = readWorkspaceId(req)
       const automationId = String(req.params.automationId)
       const body = req.body as { contactId?: string; instanceId?: string; mode?: 'run_now' | 'wait_for_message' }
@@ -426,8 +436,8 @@ export function createWaRouter(): Router {
         return
       }
 
-      const admin = getServiceRoleClient()
-      const { data: automation, error: automationError } = await admin
+      const db = createUserClient(authed.accessToken)
+      const { data: automation, error: automationError } = await db
         .from('automations')
         .select('id, entry_node_id, graph')
         .eq('workspace_id', workspaceId)
@@ -445,7 +455,7 @@ export function createWaRouter(): Router {
         return
       }
 
-      const { data: contact, error: contactError } = await admin
+      const { data: contact, error: contactError } = await db
         .from('contacts')
         .select('id, wa_jid')
         .eq('workspace_id', workspaceId)
@@ -457,7 +467,7 @@ export function createWaRouter(): Router {
         return
       }
 
-      const { data: instances, error: instanceError } = await admin
+      const { data: instances, error: instanceError } = await db
         .from('whatsapp_instances')
         .select('id, is_default, pairing_status')
         .eq('workspace_id', workspaceId)
@@ -489,7 +499,7 @@ export function createWaRouter(): Router {
       const mode = body.mode ?? 'run_now'
 
       if (mode === 'wait_for_message') {
-        const { data: run, error: runError } = await admin
+        const { data: run, error: runError } = await db
           .from('automation_runs')
           .insert({
             workspace_id: workspaceId,
@@ -526,7 +536,7 @@ export function createWaRouter(): Router {
         return
       }
 
-      const conversation = await resolveConversation(admin, {
+      const conversation = await resolveConversation(db, {
         workspaceId,
         contactId: contact.id as string,
         contactJid: contact.wa_jid as string,
@@ -551,7 +561,7 @@ export function createWaRouter(): Router {
         ],
       }
 
-      const { data: run, error: runError } = await admin
+      const { data: run, error: runError } = await db
         .from('automation_runs')
         .insert({
           workspace_id: workspaceId,
@@ -569,7 +579,7 @@ export function createWaRouter(): Router {
 
       if (runError || !run) throw new Error(runError?.message ?? 'Failed to create test automation run')
 
-      await executeAutomationRun(admin, {
+      await executeAutomationRun(db, {
         workspaceId,
         contactId: contact.id as string,
         contactJid: contact.wa_jid as string,
