@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getDemoAuthConfig } from '../config/public-env'
@@ -6,11 +6,12 @@ import { getDemoAuthConfig } from '../config/public-env'
 export default function Login() {
   const { user, loading, signIn, signUp, configured } = useAuth()
   const demo = getDemoAuthConfig()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const [email, setEmail] = useState(demo.enabled ? demo.email : '')
+  const [password, setPassword] = useState(demo.enabled ? demo.password : '')
   const [mode, setMode] = useState<'signin' | 'signup'>('signin')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const autoLoginAttemptedRef = useRef(false)
 
   if (loading) {
     return (
@@ -31,6 +32,24 @@ export default function Login() {
     )
   }
   if (user) return <Navigate to="/workspaces" replace />
+
+  useEffect(() => {
+    if (!demo.enabled || autoLoginAttemptedRef.current) return
+    const host = window.location.hostname.toLowerCase()
+    const params = new URLSearchParams(window.location.search)
+    const shouldAutoLogin = host === 'demo.brandochat' || host.startsWith('demo.') || params.get('demo') === '1'
+    if (!shouldAutoLogin) return
+
+    autoLoginAttemptedRef.current = true
+    setEmail(demo.email)
+    setPassword(demo.password)
+    setBusy(true)
+    setError(null)
+    signIn(demo.email, demo.password).catch((err: unknown) => {
+      setError(err instanceof Error ? err.message : 'Demo login failed')
+      setBusy(false)
+    })
+  }, [demo.email, demo.enabled, demo.password, signIn])
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -91,6 +110,7 @@ export default function Login() {
             <input
               type="email"
               required
+              autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none ring-cyan-500/50 focus:ring-2 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
@@ -102,6 +122,7 @@ export default function Login() {
               type="password"
               required
               minLength={6}
+              autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none ring-cyan-500/50 focus:ring-2 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
