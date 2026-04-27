@@ -22,6 +22,8 @@ export function getDemoAuthConfig(): {
   password: string
 } {
   const modeOn = String(import.meta.env.VITE_DEMO_MODE || '').toLowerCase() === 'true'
+  const prefillOptIn =
+    String(import.meta.env.VITE_DEMO_PREFILL || '').toLowerCase() === 'true'
   const explicitEmail = String(import.meta.env.VITE_DEMO_EMAIL ?? '').trim()
   const explicitPassword = String(import.meta.env.VITE_DEMO_PASSWORD ?? '').trim()
   const explicitCreds = explicitEmail !== '' && explicitPassword !== ''
@@ -31,7 +33,8 @@ export function getDemoAuthConfig(): {
 
   return {
     enabled: modeOn,
-    prefillLoginFields: modeOn || explicitCreds,
+    /** Prefill when demo mode, both explicit vars, or VITE_DEMO_PREFILL=true (uses email/password or built-in defaults) */
+    prefillLoginFields: modeOn || explicitCreds || prefillOptIn,
     email,
     password,
   }

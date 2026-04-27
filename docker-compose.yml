@@ -36,6 +36,10 @@ services:
       args:
         VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
         VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
+        VITE_DEMO_MODE: ${VITE_DEMO_MODE:-}
+        VITE_DEMO_EMAIL: ${VITE_DEMO_EMAIL:-}
+        VITE_DEMO_PASSWORD: ${VITE_DEMO_PASSWORD:-}
+        VITE_DEMO_PREFILL: ${VITE_DEMO_PREFILL:-}
     depends_on:
       - backend
     expose:
