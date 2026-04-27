@@ -13,6 +13,7 @@ fi
 
 # shellcheck disable=SC1091
 source "${ENV_FILE}"
+SUPABASE_API_KEY="${SUPABASE_SERVICE_ROLE_KEY}"
 
 if ! command -v curl >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
   echo "curl and jq are required."
@@ -24,7 +25,7 @@ DEMO_PASSWORD="${DEMO_PASSWORD:-DemoPass123!}"
 
 echo "Creating demo auth user..."
 USER_JSON="$(curl -sS -X POST "${SUPABASE_URL}/auth/v1/admin/users" \
-  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "apikey: ${SUPABASE_API_KEY}" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Content-Type: application/json" \
   -d "{\"email\":\"${DEMO_EMAIL}\",\"password\":\"${DEMO_PASSWORD}\",\"email_confirm\":true}")"
@@ -33,7 +34,7 @@ USER_ID="$(echo "$USER_JSON" | jq -r '.id // empty')"
 if [[ -z "${USER_ID}" ]]; then
   # If already exists, query by email
   USERS_JSON="$(curl -sS "${SUPABASE_URL}/auth/v1/admin/users?page=1&per_page=200" \
-    -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+    -H "apikey: ${SUPABASE_API_KEY}" \
     -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}")"
   USER_ID="$(echo "$USERS_JSON" | jq -r ".users[]? | select(.email==\"${DEMO_EMAIL}\") | .id" | head -n1)"
 fi
@@ -44,6 +45,41 @@ if [[ -z "${USER_ID}" ]]; then
 fi
 
 echo "Using demo user id: ${USER_ID}"
+
+# Some DB triggers rely on auth.uid(). For REST writes, build a service_role JWT
+# with sub=<demo user id> when JWT_SECRET is available.
+if [[ -n "${JWT_SECRET:-}" ]] && command -v python3 >/dev/null 2>&1; then
+  REST_TOKEN="$(
+    USER_ID="$USER_ID" JWT_SECRET="$JWT_SECRET" python3 - <<'PY'
+import base64, hashlib, hmac, json, os, time
+
+secret = os.environ["JWT_SECRET"].encode()
+user_id = os.environ["USER_ID"]
+now = int(time.time())
+payload = {
+    "role": "service_role",
+    "sub": user_id,
+    "iss": "supabase",
+    "iat": now,
+    "exp": now + 60 * 60,
+}
+header = {"alg": "HS256", "typ": "JWT"}
+
+def enc(obj):
+    raw = json.dumps(obj, separators=(",", ":")).encode()
+    return base64.urlsafe_b64encode(raw).rstrip(b"=")
+
+h = enc(header)
+p = enc(payload)
+s = base64.urlsafe_b64encode(hmac.new(secret, h + b"." + p, hashlib.sha256).digest()).rstrip(b"=")
+print((h + b"." + p + b"." + s).decode())
+PY
+  )"
+
+  if [[ -n "$REST_TOKEN" ]]; then
+    SUPABASE_SERVICE_ROLE_KEY="$REST_TOKEN"
+  fi
+fi
 
 WORKSPACE_ID="11111111-1111-4111-8111-111111111111"
 INSTANCE_ID="11111111-1111-4111-8111-111111111112"
@@ -74,7 +110,7 @@ LABEL_WAITING_ID="11111111-1111-4111-8111-111111111802"
 
 echo "Upserting demo workspace..."
 curl -sS -X POST "${SUPABASE_URL}/rest/v1/workspaces" \
-  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "apikey: ${SUPABASE_API_KEY}" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Content-Type: application/json" \
   -H "Prefer: resolution=merge-duplicates,return=representation" \
@@ -82,7 +118,7 @@ curl -sS -X POST "${SUPABASE_URL}/rest/v1/workspaces" \
 
 echo "Upserting workspace membership..."
 curl -sS -X POST "${SUPABASE_URL}/rest/v1/workspace_members" \
-  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "apikey: ${SUPABASE_API_KEY}" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Content-Type: application/json" \
   -H "Prefer: resolution=merge-duplicates,return=minimal" \
@@ -90,7 +126,7 @@ curl -sS -X POST "${SUPABASE_URL}/rest/v1/workspace_members" \
 
 echo "Inserting demo contacts..."
 curl -sS -X POST "${SUPABASE_URL}/rest/v1/contacts" \
-  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "apikey: ${SUPABASE_API_KEY}" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Content-Type: application/json" \
   -H "Prefer: resolution=merge-duplicates,return=minimal" \
@@ -104,7 +140,7 @@ curl -sS -X POST "${SUPABASE_URL}/rest/v1/contacts" \
 
 echo "Ensuring default WhatsApp instance row..."
 curl -sS -X POST "${SUPABASE_URL}/rest/v1/whatsapp_instances" \
-  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "apikey: ${SUPABASE_API_KEY}" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Content-Type: application/json" \
   -H "Prefer: resolution=merge-duplicates,return=minimal" \
@@ -112,7 +148,7 @@ curl -sS -X POST "${SUPABASE_URL}/rest/v1/whatsapp_instances" \
 
 echo "Inserting demo conversations..."
 curl -sS -X POST "${SUPABASE_URL}/rest/v1/conversations" \
-  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "apikey: ${SUPABASE_API_KEY}" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Content-Type: application/json" \
   -H "Prefer: resolution=merge-duplicates,return=minimal" \
@@ -124,7 +160,7 @@ curl -sS -X POST "${SUPABASE_URL}/rest/v1/conversations" \
 
 echo "Inserting demo automations..."
 curl -sS -X POST "${SUPABASE_URL}/rest/v1/automations" \
-  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "apikey: ${SUPABASE_API_KEY}" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Content-Type: application/json" \
   -H "Prefer: resolution=merge-duplicates,return=minimal" \
@@ -135,7 +171,7 @@ curl -sS -X POST "${SUPABASE_URL}/rest/v1/automations" \
 
 echo "Inserting demo automation run logs..."
 curl -sS -X POST "${SUPABASE_URL}/rest/v1/automation_runs" \
-  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "apikey: ${SUPABASE_API_KEY}" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Content-Type: application/json" \
   -H "Prefer: resolution=merge-duplicates,return=minimal" \
@@ -146,7 +182,7 @@ curl -sS -X POST "${SUPABASE_URL}/rest/v1/automation_runs" \
 
 echo "Inserting demo message events..."
 curl -sS -X POST "${SUPABASE_URL}/rest/v1/message_events" \
-  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "apikey: ${SUPABASE_API_KEY}" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Content-Type: application/json" \
   -H "Prefer: return=minimal" \
@@ -158,7 +194,7 @@ curl -sS -X POST "${SUPABASE_URL}/rest/v1/message_events" \
 
 echo "Inserting demo lists/tags and memberships..."
 curl -sS -X POST "${SUPABASE_URL}/rest/v1/workspace_contact_lists" \
-  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "apikey: ${SUPABASE_API_KEY}" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Content-Type: application/json" \
   -H "Prefer: resolution=merge-duplicates,return=minimal" \
@@ -168,7 +204,7 @@ curl -sS -X POST "${SUPABASE_URL}/rest/v1/workspace_contact_lists" \
   ]" >/dev/null
 
 curl -sS -X POST "${SUPABASE_URL}/rest/v1/workspace_contact_tags" \
-  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "apikey: ${SUPABASE_API_KEY}" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Content-Type: application/json" \
   -H "Prefer: resolution=merge-duplicates,return=minimal" \
@@ -179,7 +215,7 @@ curl -sS -X POST "${SUPABASE_URL}/rest/v1/workspace_contact_tags" \
   ]" >/dev/null
 
 curl -sS -X POST "${SUPABASE_URL}/rest/v1/contact_list_members" \
-  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "apikey: ${SUPABASE_API_KEY}" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Content-Type: application/json" \
   -H "Prefer: resolution=merge-duplicates,return=minimal" \
@@ -191,7 +227,7 @@ curl -sS -X POST "${SUPABASE_URL}/rest/v1/contact_list_members" \
   ]" >/dev/null
 
 curl -sS -X POST "${SUPABASE_URL}/rest/v1/contact_tag_members" \
-  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "apikey: ${SUPABASE_API_KEY}" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Content-Type: application/json" \
   -H "Prefer: resolution=merge-duplicates,return=minimal" \
@@ -203,7 +239,7 @@ curl -sS -X POST "${SUPABASE_URL}/rest/v1/contact_tag_members" \
 
 echo "Inserting demo conversation labels..."
 curl -sS -X POST "${SUPABASE_URL}/rest/v1/workspace_labels" \
-  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "apikey: ${SUPABASE_API_KEY}" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Content-Type: application/json" \
   -H "Prefer: resolution=merge-duplicates,return=minimal" \
@@ -213,7 +249,7 @@ curl -sS -X POST "${SUPABASE_URL}/rest/v1/workspace_labels" \
   ]" >/dev/null
 
 curl -sS -X POST "${SUPABASE_URL}/rest/v1/conversation_labels" \
-  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "apikey: ${SUPABASE_API_KEY}" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Content-Type: application/json" \
   -H "Prefer: resolution=merge-duplicates,return=minimal" \
@@ -224,7 +260,7 @@ curl -sS -X POST "${SUPABASE_URL}/rest/v1/conversation_labels" \
 
 echo "Inserting demo integration logs..."
 curl -sS -X POST "${SUPABASE_URL}/rest/v1/workspace_integration_logs" \
-  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "apikey: ${SUPABASE_API_KEY}" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Content-Type: application/json" \
   -H "Prefer: return=minimal" \

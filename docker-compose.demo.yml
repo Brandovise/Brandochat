@@ -23,6 +23,10 @@ services:
     depends_on:
       db-init-demo:
         condition: service_completed_successfully
+    networks:
+      default:
+        aliases:
+          - backend
     volumes:
       - wa_sessions_demo:/app/data/wa_sessions
     ports:
