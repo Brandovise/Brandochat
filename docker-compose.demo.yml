@@ -1,13 +1,28 @@
 services:
+  db-init-demo:
+    image: postgres:16-alpine
+    env_file:
+      - ./.env
+    working_dir: /workspace
+    volumes:
+      - ./:/workspace
+    command: >
+      sh -lc "apk add --no-cache bash curl jq >/dev/null &&
+      ENV_FILE=.env bash scripts/demo/init-demo-db.sh"
+    restart: "no"
+
   backend-demo:
     build:
       context: ./automation-platform/backend
       dockerfile: Dockerfile
     env_file:
-      - ./.env.demo
+      - ./.env
     environment:
       PORT: 3847
       WA_AUTH_ROOT: /app/data/wa_sessions
+    depends_on:
+      db-init-demo:
+        condition: service_completed_successfully
     volumes:
       - wa_sessions_demo:/app/data/wa_sessions
     ports:

@@ -4,13 +4,15 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
-if [[ ! -f ".env.demo" ]]; then
-  echo ".env.demo not found. Run scripts/demo/bootstrap-local-demo.sh first."
+ENV_FILE="${ENV_FILE:-.env.demo}"
+
+if [[ ! -f "${ENV_FILE}" ]]; then
+  echo "${ENV_FILE} not found. Set ENV_FILE or create ${ENV_FILE}."
   exit 1
 fi
 
 # shellcheck disable=SC1091
-source .env.demo
+source "${ENV_FILE}"
 
 if ! command -v curl >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
   echo "curl and jq are required."

@@ -70,6 +70,7 @@ Required backend keys:
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
+- `DATABASE_URL` (optional, enables one-click schema bootstrap from Docker Compose)
 - `WA_AUTH_ROOT` (optional, default `./data/wa_sessions`)
 - `OPENAI_API_KEY` (optional)
 - `OPENAI_MODEL` (optional)
@@ -121,6 +122,7 @@ BrandoChat supports a demo environment that uses the same frontend/backend code,
 
 - `docker-compose.demo.yml`
 - `.env.demo.example`
+- `scripts/demo/init-demo-db.sh`
 - `scripts/demo/bootstrap-local-demo.sh`
 - `scripts/demo/seed-demo-data.sh`
 - `scripts/demo/stop-demo.sh`
@@ -153,6 +155,19 @@ Demo login:
 - Email: `demo@brandochat.local`
 - Password: `DemoPass123!`
 - In demo mode, the login page also shows a **Use demo account** button.
+
+### One-click auto bootstrap on deploy
+
+You can make first deploy self-initializing (schema + demo data) with Docker Compose:
+
+1. Set `DATABASE_URL` in `.env` (or `.env.demo`) to your Postgres endpoint.
+2. Run `docker compose up -d --build` (or demo compose variant).
+3. Compose runs a one-shot `db-init` service before backend:
+   - checks `public.workspaces`,
+   - runs `supabase/migrations/*.sql` if schema is missing,
+   - runs `scripts/demo/seed-demo-data.sh`.
+
+If schema already exists, migrations are skipped and seed runs idempotently.
 
 ### How demo Supabase is set up
 
