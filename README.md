@@ -236,7 +236,7 @@ If `supabase db push` fails, fix the error before deploying app containers.
 
 #### A) Root `.env` (used by Docker Compose / frontend build args)
 
-Create `/home/jibran-shahid/Work/Documents/GitHub_Work/202604_Superchat_OpenSouurce/.env`:
+Create `.env` in the **repository root** (copy from `.env.demo.example` or start empty):
 
 ```env
 VITE_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
@@ -245,7 +245,7 @@ VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
 
 #### B) Backend `.env` (server/runtime secrets)
 
-Create `/home/jibran-shahid/Work/Documents/GitHub_Work/202604_Superchat_OpenSouurce/automation-platform/backend/.env`:
+Create `automation-platform/backend/.env` (see `automation-platform/backend/.env.example`):
 
 ```env
 SUPABASE_URL=https://YOUR_PROJECT.supabase.co
@@ -340,9 +340,13 @@ Run migrations before or during deploy window to avoid schema drift.
 
 ## Security basics
 
-- Keep service keys backend-only.
-- Never commit `.env` secrets or session/auth directories.
-- Persist and protect WhatsApp auth state storage.
+This repository is **open source**: do not commit real API keys, Supabase **service_role** keys, database passwords, Calendly tokens, or WhatsApp session data.
+
+- Keep **service_role** and database URLs **backend-only**; never bake them into the frontend bundle.
+- Never commit `.env` files (they are gitignored); use only `.env.example` / `.env.demo.example` with placeholders.
+- Keep `supabase/config.toml` **project_id** as a placeholder locally; run `supabase link` for your real ref (that ref is not a signing key but identifies your project).
+- Demo login defaults (`demo@brandochat.local` / `DemoPass123!`) are **intentionally public** for the hosted demo only—change them for any private deployment.
+- Persist and protect WhatsApp auth state storage (`WA_AUTH_ROOT`); do not commit `data/wa_sessions/`.
 
 ## Project status
 
