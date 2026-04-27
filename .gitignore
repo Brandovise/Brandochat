@@ -1,9 +1,6 @@
 node_modules/
 Baileys-reference/
 dist/
-.env
-.env.local
-.env.*
 .envrc
 *.log
 data/wa_sessions/
@@ -24,3 +21,4 @@ service-account*.json
 supabase/.branches/
 supabase/.temp/
 .DS_Store
+config.bat
