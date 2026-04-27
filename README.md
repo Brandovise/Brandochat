@@ -152,12 +152,19 @@ Demo URLs:
 Demo login:
 - Email: `demo@brandochat.local`
 - Password: `DemoPass123!`
+- In demo mode, the login page also shows a **Use demo account** button.
 
 ### How demo Supabase is set up
 
 - Supabase is not mocked. It runs locally via Supabase OSS Docker services started by CLI.
 - Database schema comes from your real migrations (`supabase/migrations/*`).
-- Demo records are inserted by `scripts/demo/seed-demo-data.sh`.
+- Demo records are inserted by `scripts/demo/seed-demo-data.sh` including:
+  - multiple contacts,
+  - conversations and message events,
+  - contact lists and tags (+ memberships),
+  - automations and automation run logs,
+  - workspace labels and conversation labels,
+  - integration logs.
 - Every reset/restart can recreate a clean demo state.
 
 ### Demo deployment branch strategy
@@ -165,6 +172,14 @@ Demo login:
 - Keep this demo stack on a dedicated branch (e.g. `demo` or `demo-stack`).
 - Deploy your demo environment from that branch.
 - Keep production branch clean and merge demo changes selectively.
+
+### Why demo still uses Supabase
+
+The current frontend reads/writes many entities directly via Supabase client + RLS.
+To avoid maintaining a second demo UI/backend codebase, demo mode keeps this same architecture and uses:
+- dedicated demo Supabase data,
+- seeded demo user/workspace,
+- one-click demo login helper in the UI.
 
 ### Stop demo
 

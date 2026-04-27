@@ -12,3 +12,15 @@ export function getSupabaseBrowserConfig(): { url: string; anonKey: string } {
     anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder-anon-key',
   }
 }
+
+export function getDemoAuthConfig(): {
+  enabled: boolean
+  email: string
+  password: string
+} {
+  return {
+    enabled: String(import.meta.env.VITE_DEMO_MODE || '').toLowerCase() === 'true',
+    email: import.meta.env.VITE_DEMO_EMAIL || 'demo@brandochat.local',
+    password: import.meta.env.VITE_DEMO_PASSWORD || 'DemoPass123!',
+  }
+}

@@ -44,6 +44,31 @@ fi
 echo "Using demo user id: ${USER_ID}"
 
 WORKSPACE_ID="11111111-1111-4111-8111-111111111111"
+INSTANCE_ID="11111111-1111-4111-8111-111111111112"
+
+CONTACT_1_ID="11111111-1111-4111-8111-111111111201"
+CONTACT_2_ID="11111111-1111-4111-8111-111111111202"
+CONTACT_3_ID="11111111-1111-4111-8111-111111111203"
+CONTACT_4_ID="11111111-1111-4111-8111-111111111204"
+CONTACT_5_ID="11111111-1111-4111-8111-111111111205"
+
+CONVERSATION_1_ID="11111111-1111-4111-8111-111111111301"
+CONVERSATION_2_ID="11111111-1111-4111-8111-111111111302"
+CONVERSATION_3_ID="11111111-1111-4111-8111-111111111303"
+
+LIST_NEW_LEADS_ID="11111111-1111-4111-8111-111111111401"
+LIST_FOLLOW_UP_ID="11111111-1111-4111-8111-111111111402"
+TAG_HIGH_INTENT_ID="11111111-1111-4111-8111-111111111501"
+TAG_BOOKED_CALL_ID="11111111-1111-4111-8111-111111111502"
+TAG_NEEDS_DOCS_ID="11111111-1111-4111-8111-111111111503"
+
+AUTOMATION_WELCOME_ID="11111111-1111-4111-8111-111111111601"
+AUTOMATION_FOLLOWUP_ID="11111111-1111-4111-8111-111111111602"
+RUN_1_ID="11111111-1111-4111-8111-111111111701"
+RUN_2_ID="11111111-1111-4111-8111-111111111702"
+
+LABEL_NEW_ID="11111111-1111-4111-8111-111111111801"
+LABEL_WAITING_ID="11111111-1111-4111-8111-111111111802"
 
 echo "Upserting demo workspace..."
 curl -sS -X POST "${SUPABASE_URL}/rest/v1/workspaces" \
@@ -51,7 +76,7 @@ curl -sS -X POST "${SUPABASE_URL}/rest/v1/workspaces" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Content-Type: application/json" \
   -H "Prefer: resolution=merge-duplicates,return=representation" \
-  -d "[{\"id\":\"${WORKSPACE_ID}\",\"name\":\"BrandoChat Demo Workspace\",\"slug\":\"brandochat-demo\"}]" >/dev/null
+  -d "[{\"id\":\"${WORKSPACE_ID}\",\"name\":\"BrandoChat Demo Workspace\",\"slug\":\"brandochat-demo\",\"description\":\"Seeded demo workspace with realistic sample data\",\"timezone\":\"Europe/Berlin\"}]" >/dev/null
 
 echo "Upserting workspace membership..."
 curl -sS -X POST "${SUPABASE_URL}/rest/v1/workspace_members" \
@@ -66,20 +91,14 @@ curl -sS -X POST "${SUPABASE_URL}/rest/v1/contacts" \
   -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Content-Type: application/json" \
-  -H "Prefer: return=minimal" \
+  -H "Prefer: resolution=merge-duplicates,return=minimal" \
   -d "[
-    {\"workspace_id\":\"${WORKSPACE_ID}\",\"wa_jid\":\"491700000001@s.whatsapp.net\",\"phone_e164\":\"+491700000001\",\"display_name\":\"Demo Lead 1\",\"notes\":\"Interested in onboarding\",\"metadata\":{\"source\":\"demo\"}},
-    {\"workspace_id\":\"${WORKSPACE_ID}\",\"wa_jid\":\"491700000002@s.whatsapp.net\",\"phone_e164\":\"+491700000002\",\"display_name\":\"Demo Lead 2\",\"notes\":\"Needs follow-up\",\"metadata\":{\"source\":\"demo\"}},
-    {\"workspace_id\":\"${WORKSPACE_ID}\",\"wa_jid\":\"491700000003@s.whatsapp.net\",\"phone_e164\":\"+491700000003\",\"display_name\":\"Demo Lead 3\",\"notes\":\"Requested callback\",\"metadata\":{\"source\":\"demo\"}}
+    {\"id\":\"${CONTACT_1_ID}\",\"workspace_id\":\"${WORKSPACE_ID}\",\"wa_jid\":\"491700000001@s.whatsapp.net\",\"phone_e164\":\"+491700000001\",\"display_name\":\"Anna Becker\",\"notes\":\"Wants onboarding this week\",\"metadata\":{\"source\":\"demo\",\"company\":\"Becker Finance\"}},
+    {\"id\":\"${CONTACT_2_ID}\",\"workspace_id\":\"${WORKSPACE_ID}\",\"wa_jid\":\"491700000002@s.whatsapp.net\",\"phone_e164\":\"+491700000002\",\"display_name\":\"Luca Schmidt\",\"notes\":\"Needs follow-up next Tuesday\",\"metadata\":{\"source\":\"demo\",\"company\":\"Schmidt Immobilien\"}},
+    {\"id\":\"${CONTACT_3_ID}\",\"workspace_id\":\"${WORKSPACE_ID}\",\"wa_jid\":\"491700000003@s.whatsapp.net\",\"phone_e164\":\"+491700000003\",\"display_name\":\"Miriam Roth\",\"notes\":\"Requested pricing PDF\",\"metadata\":{\"source\":\"demo\",\"company\":\"Roth Consulting\"}},
+    {\"id\":\"${CONTACT_4_ID}\",\"workspace_id\":\"${WORKSPACE_ID}\",\"wa_jid\":\"491700000004@s.whatsapp.net\",\"phone_e164\":\"+491700000004\",\"display_name\":\"David Neumann\",\"notes\":\"Booked Calendly call\",\"metadata\":{\"source\":\"demo\",\"company\":\"Neumann Tax\"}},
+    {\"id\":\"${CONTACT_5_ID}\",\"workspace_id\":\"${WORKSPACE_ID}\",\"wa_jid\":\"491700000005@s.whatsapp.net\",\"phone_e164\":\"+491700000005\",\"display_name\":\"Sara Klein\",\"notes\":\"Sent voice note, waiting on docs\",\"metadata\":{\"source\":\"demo\",\"company\":\"Klein Legal\"}}
   ]" >/dev/null
-
-echo "Inserting demo automation..."
-curl -sS -X POST "${SUPABASE_URL}/rest/v1/automations" \
-  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
-  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
-  -H "Content-Type: application/json" \
-  -H "Prefer: return=minimal" \
-  -d "[{\"workspace_id\":\"${WORKSPACE_ID}\",\"name\":\"Demo Welcome Flow\",\"description\":\"Sample demo automation\",\"is_active\":true,\"entry_node_id\":\"start\",\"graph\":{\"entry\":\"start\",\"nodes\":[]}}]" >/dev/null
 
 echo "Ensuring default WhatsApp instance row..."
 curl -sS -X POST "${SUPABASE_URL}/rest/v1/whatsapp_instances" \
@@ -87,6 +106,129 @@ curl -sS -X POST "${SUPABASE_URL}/rest/v1/whatsapp_instances" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Content-Type: application/json" \
   -H "Prefer: resolution=merge-duplicates,return=minimal" \
-  -d "[{\"workspace_id\":\"${WORKSPACE_ID}\",\"pairing_status\":\"disconnected\",\"phone_label\":\"Demo Number\"}]" >/dev/null
+  -d "[{\"id\":\"${INSTANCE_ID}\",\"workspace_id\":\"${WORKSPACE_ID}\",\"pairing_status\":\"connected\",\"phone_label\":\"Demo Number\"}]" >/dev/null
+
+echo "Inserting demo conversations..."
+curl -sS -X POST "${SUPABASE_URL}/rest/v1/conversations" \
+  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "Prefer: resolution=merge-duplicates,return=minimal" \
+  -d "[
+    {\"id\":\"${CONVERSATION_1_ID}\",\"workspace_id\":\"${WORKSPACE_ID}\",\"contact_id\":\"${CONTACT_1_ID}\",\"wa_chat_jid\":\"491700000001@s.whatsapp.net\",\"status\":\"open\",\"assignee\":\"Sales Team\",\"source_whatsapp_instance_id\":\"${INSTANCE_ID}\",\"last_message_at\":\"2026-04-20T10:15:00Z\"},
+    {\"id\":\"${CONVERSATION_2_ID}\",\"workspace_id\":\"${WORKSPACE_ID}\",\"contact_id\":\"${CONTACT_2_ID}\",\"wa_chat_jid\":\"491700000002@s.whatsapp.net\",\"status\":\"open\",\"assignee\":\"Ops Team\",\"source_whatsapp_instance_id\":\"${INSTANCE_ID}\",\"last_message_at\":\"2026-04-20T11:00:00Z\"},
+    {\"id\":\"${CONVERSATION_3_ID}\",\"workspace_id\":\"${WORKSPACE_ID}\",\"contact_id\":\"${CONTACT_4_ID}\",\"wa_chat_jid\":\"491700000004@s.whatsapp.net\",\"status\":\"closed\",\"assignee\":\"Sales Team\",\"source_whatsapp_instance_id\":\"${INSTANCE_ID}\",\"last_message_at\":\"2026-04-19T16:20:00Z\",\"closed_at\":\"2026-04-19T17:00:00Z\"}
+  ]" >/dev/null
+
+echo "Inserting demo automations..."
+curl -sS -X POST "${SUPABASE_URL}/rest/v1/automations" \
+  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "Prefer: resolution=merge-duplicates,return=minimal" \
+  -d "[
+    {\"id\":\"${AUTOMATION_WELCOME_ID}\",\"workspace_id\":\"${WORKSPACE_ID}\",\"name\":\"Welcome & Qualify\",\"description\":\"Send welcome + ask qualification question\",\"is_active\":true,\"entry_node_id\":\"start\",\"trigger_type\":\"message.received\",\"graph\":{\"entry\":\"start\",\"nodes\":[]}},
+    {\"id\":\"${AUTOMATION_FOLLOWUP_ID}\",\"workspace_id\":\"${WORKSPACE_ID}\",\"name\":\"No-Reply Follow-up\",\"description\":\"Send reminder after delay\",\"is_active\":true,\"entry_node_id\":\"start\",\"trigger_type\":\"calendly.event\",\"graph\":{\"entry\":\"start\",\"nodes\":[]}}
+  ]" >/dev/null
+
+echo "Inserting demo automation run logs..."
+curl -sS -X POST "${SUPABASE_URL}/rest/v1/automation_runs" \
+  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "Prefer: resolution=merge-duplicates,return=minimal" \
+  -d "[
+    {\"id\":\"${RUN_1_ID}\",\"workspace_id\":\"${WORKSPACE_ID}\",\"automation_id\":\"${AUTOMATION_WELCOME_ID}\",\"contact_id\":\"${CONTACT_1_ID}\",\"conversation_id\":\"${CONVERSATION_1_ID}\",\"status\":\"completed\",\"current_node_id\":\"done\",\"variables\":{\"demo\":true},\"trigger_type\":\"message.received\",\"trigger_payload\":{\"channel\":\"whatsapp\"},\"started_at\":\"2026-04-20T10:16:00Z\",\"completed_at\":\"2026-04-20T10:16:08Z\"},
+    {\"id\":\"${RUN_2_ID}\",\"workspace_id\":\"${WORKSPACE_ID}\",\"automation_id\":\"${AUTOMATION_FOLLOWUP_ID}\",\"contact_id\":\"${CONTACT_2_ID}\",\"conversation_id\":\"${CONVERSATION_2_ID}\",\"status\":\"running\",\"current_node_id\":\"wait_24h\",\"variables\":{\"demo\":true},\"trigger_type\":\"calendly.event\",\"trigger_payload\":{\"event\":\"invitee.created\"},\"started_at\":\"2026-04-20T11:03:00Z\"}
+  ]" >/dev/null
+
+echo "Inserting demo message events..."
+curl -sS -X POST "${SUPABASE_URL}/rest/v1/message_events" \
+  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "Prefer: return=minimal" \
+  -d "[
+    {\"workspace_id\":\"${WORKSPACE_ID}\",\"contact_id\":\"${CONTACT_1_ID}\",\"conversation_id\":\"${CONVERSATION_1_ID}\",\"direction\":\"inbound\",\"wa_message_id\":\"demo-in-1\",\"wa_chat_jid\":\"491700000001@s.whatsapp.net\",\"body\":\"Hi, I'd like a quick onboarding call.\",\"created_at\":\"2026-04-20T10:15:00Z\"},
+    {\"workspace_id\":\"${WORKSPACE_ID}\",\"contact_id\":\"${CONTACT_1_ID}\",\"conversation_id\":\"${CONVERSATION_1_ID}\",\"direction\":\"outbound\",\"wa_message_id\":\"demo-out-1\",\"wa_chat_jid\":\"491700000001@s.whatsapp.net\",\"body\":\"Great, I can help. Are you available tomorrow?\",\"automation_id\":\"${AUTOMATION_WELCOME_ID}\",\"node_id\":\"welcome_message\",\"created_at\":\"2026-04-20T10:16:02Z\"},
+    {\"workspace_id\":\"${WORKSPACE_ID}\",\"contact_id\":\"${CONTACT_2_ID}\",\"conversation_id\":\"${CONVERSATION_2_ID}\",\"direction\":\"inbound\",\"wa_message_id\":\"demo-in-2\",\"wa_chat_jid\":\"491700000002@s.whatsapp.net\",\"body\":\"Can you share pricing first?\",\"created_at\":\"2026-04-20T11:00:00Z\"}
+  ]" >/dev/null
+
+echo "Inserting demo lists/tags and memberships..."
+curl -sS -X POST "${SUPABASE_URL}/rest/v1/workspace_contact_lists" \
+  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "Prefer: resolution=merge-duplicates,return=minimal" \
+  -d "[
+    {\"id\":\"${LIST_NEW_LEADS_ID}\",\"workspace_id\":\"${WORKSPACE_ID}\",\"name\":\"New Leads\",\"description\":\"Fresh inbound leads\",\"color\":\"#0ea5e9\"},
+    {\"id\":\"${LIST_FOLLOW_UP_ID}\",\"workspace_id\":\"${WORKSPACE_ID}\",\"name\":\"Follow-up Queue\",\"description\":\"Needs follow-up this week\",\"color\":\"#f59e0b\"}
+  ]" >/dev/null
+
+curl -sS -X POST "${SUPABASE_URL}/rest/v1/workspace_contact_tags" \
+  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "Prefer: resolution=merge-duplicates,return=minimal" \
+  -d "[
+    {\"id\":\"${TAG_HIGH_INTENT_ID}\",\"workspace_id\":\"${WORKSPACE_ID}\",\"name\":\"high-intent\",\"color\":\"#22c55e\"},
+    {\"id\":\"${TAG_BOOKED_CALL_ID}\",\"workspace_id\":\"${WORKSPACE_ID}\",\"name\":\"booked-call\",\"color\":\"#a855f7\"},
+    {\"id\":\"${TAG_NEEDS_DOCS_ID}\",\"workspace_id\":\"${WORKSPACE_ID}\",\"name\":\"needs-docs\",\"color\":\"#ef4444\"}
+  ]" >/dev/null
+
+curl -sS -X POST "${SUPABASE_URL}/rest/v1/contact_list_members" \
+  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "Prefer: resolution=merge-duplicates,return=minimal" \
+  -d "[
+    {\"workspace_id\":\"${WORKSPACE_ID}\",\"list_id\":\"${LIST_NEW_LEADS_ID}\",\"contact_id\":\"${CONTACT_1_ID}\"},
+    {\"workspace_id\":\"${WORKSPACE_ID}\",\"list_id\":\"${LIST_NEW_LEADS_ID}\",\"contact_id\":\"${CONTACT_2_ID}\"},
+    {\"workspace_id\":\"${WORKSPACE_ID}\",\"list_id\":\"${LIST_FOLLOW_UP_ID}\",\"contact_id\":\"${CONTACT_3_ID}\"},
+    {\"workspace_id\":\"${WORKSPACE_ID}\",\"list_id\":\"${LIST_FOLLOW_UP_ID}\",\"contact_id\":\"${CONTACT_5_ID}\"}
+  ]" >/dev/null
+
+curl -sS -X POST "${SUPABASE_URL}/rest/v1/contact_tag_members" \
+  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "Prefer: resolution=merge-duplicates,return=minimal" \
+  -d "[
+    {\"workspace_id\":\"${WORKSPACE_ID}\",\"tag_id\":\"${TAG_HIGH_INTENT_ID}\",\"contact_id\":\"${CONTACT_1_ID}\"},
+    {\"workspace_id\":\"${WORKSPACE_ID}\",\"tag_id\":\"${TAG_BOOKED_CALL_ID}\",\"contact_id\":\"${CONTACT_4_ID}\"},
+    {\"workspace_id\":\"${WORKSPACE_ID}\",\"tag_id\":\"${TAG_NEEDS_DOCS_ID}\",\"contact_id\":\"${CONTACT_5_ID}\"}
+  ]" >/dev/null
+
+echo "Inserting demo conversation labels..."
+curl -sS -X POST "${SUPABASE_URL}/rest/v1/workspace_labels" \
+  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "Prefer: resolution=merge-duplicates,return=minimal" \
+  -d "[
+    {\"id\":\"${LABEL_NEW_ID}\",\"workspace_id\":\"${WORKSPACE_ID}\",\"name\":\"new\",\"color\":\"#06b6d4\"},
+    {\"id\":\"${LABEL_WAITING_ID}\",\"workspace_id\":\"${WORKSPACE_ID}\",\"name\":\"waiting\",\"color\":\"#f59e0b\"}
+  ]" >/dev/null
+
+curl -sS -X POST "${SUPABASE_URL}/rest/v1/conversation_labels" \
+  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "Prefer: resolution=merge-duplicates,return=minimal" \
+  -d "[
+    {\"workspace_id\":\"${WORKSPACE_ID}\",\"conversation_id\":\"${CONVERSATION_1_ID}\",\"label_id\":\"${LABEL_NEW_ID}\"},
+    {\"workspace_id\":\"${WORKSPACE_ID}\",\"conversation_id\":\"${CONVERSATION_2_ID}\",\"label_id\":\"${LABEL_WAITING_ID}\"}
+  ]" >/dev/null
+
+echo "Inserting demo integration logs..."
+curl -sS -X POST "${SUPABASE_URL}/rest/v1/workspace_integration_logs" \
+  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "Prefer: return=minimal" \
+  -d "[
+    {\"workspace_id\":\"${WORKSPACE_ID}\",\"provider\":\"custom_api\",\"level\":\"info\",\"action\":\"demo_seed\",\"message\":\"Demo workspace initialized.\",\"context\":{\"seed\":\"v2\"},\"source\":\"backend\",\"created_by\":\"${USER_ID}\"},
+    {\"workspace_id\":\"${WORKSPACE_ID}\",\"provider\":\"calendly\",\"level\":\"warn\",\"action\":\"webhook_retry\",\"message\":\"Calendly webhook retry simulated for demo.\",\"context\":{\"attempt\":2},\"source\":\"backend\",\"created_by\":\"${USER_ID}\"}
+  ]" >/dev/null
 
 echo "Demo seed complete."

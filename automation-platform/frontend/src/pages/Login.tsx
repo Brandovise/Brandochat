@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { getDemoAuthConfig } from '../config/public-env'
 
 export default function Login() {
   const { user, loading, signIn, signUp, configured } = useAuth()
+  const demo = getDemoAuthConfig()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [mode, setMode] = useState<'signin' | 'signup'>('signin')
@@ -39,6 +41,18 @@ export default function Login() {
       else await signUp(email, password)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Authentication failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function useDemoLogin() {
+    setError(null)
+    setBusy(true)
+    try {
+      await signIn(demo.email, demo.password)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Demo login failed')
     } finally {
       setBusy(false)
     }
@@ -101,6 +115,16 @@ export default function Login() {
           >
             {busy ? 'Please wait…' : mode === 'signin' ? 'Sign in' : 'Create account'}
           </button>
+          {demo.enabled ? (
+            <button
+              type="button"
+              disabled={busy}
+              className="rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-4 py-2.5 text-sm font-medium text-cyan-200 hover:bg-cyan-500/20 disabled:opacity-50"
+              onClick={useDemoLogin}
+            >
+              Use demo account
+            </button>
+          ) : null}
           <button
             type="button"
             className="text-center text-sm text-cyan-600 hover:underline dark:text-cyan-300"
