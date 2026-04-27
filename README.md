@@ -3,7 +3,6 @@
 BrandoChat is an open-source WhatsApp team workspace and automation platform.
 
 Website: [brandochat.com](https://brandochat.com)  
-Website repo: [brandovise25/brandochat-website](https://github.com/brandovise25/brandochat-website)
 
 ## Our aim
 
@@ -106,6 +105,78 @@ docker compose up -d --build
 Default endpoints:
 - Frontend: `http://localhost:5173`
 - Backend: `http://localhost:3847`
+
+## Demo setup (same UI, local demo DB)
+
+BrandoChat supports a demo environment that uses the same frontend/backend code, but runs against a local Supabase stack with seeded dummy data.
+
+### What this gives you
+
+- Same production UI/UX
+- Same backend logic
+- Separate demo data and credentials
+- Easy reset/reseed flow
+
+### Demo files in this repo
+
+- `docker-compose.demo.yml`
+- `.env.demo.example`
+- `scripts/demo/bootstrap-local-demo.sh`
+- `scripts/demo/seed-demo-data.sh`
+- `scripts/demo/stop-demo.sh`
+
+### Prerequisites
+
+- Docker + Docker Compose
+- Supabase CLI
+- `jq`
+- `curl`
+
+### Start demo locally
+
+```bash
+bash scripts/demo/bootstrap-local-demo.sh
+```
+
+This script will:
+1. Start local Supabase OSS stack (`supabase start` runs official open-source Docker services)
+2. Generate `.env.demo` from local Supabase keys
+3. Reset local DB with migrations
+4. Seed demo user/workspace/sample records
+5. Start demo frontend + backend containers
+
+Demo URLs:
+- Frontend: `http://localhost:15173`
+- Backend: `http://localhost:13847`
+
+Demo login:
+- Email: `demo@brandochat.local`
+- Password: `DemoPass123!`
+
+### How demo Supabase is set up
+
+- Supabase is not mocked. It runs locally via Supabase OSS Docker services started by CLI.
+- Database schema comes from your real migrations (`supabase/migrations/*`).
+- Demo records are inserted by `scripts/demo/seed-demo-data.sh`.
+- Every reset/restart can recreate a clean demo state.
+
+### Demo deployment branch strategy
+
+- Keep this demo stack on a dedicated branch (e.g. `demo` or `demo-stack`).
+- Deploy your demo environment from that branch.
+- Keep production branch clean and merge demo changes selectively.
+
+### Stop demo
+
+```bash
+bash scripts/demo/stop-demo.sh
+```
+
+### Reseed demo data only
+
+```bash
+bash scripts/demo/seed-demo-data.sh
+```
 
 ## Production deployment guide
 

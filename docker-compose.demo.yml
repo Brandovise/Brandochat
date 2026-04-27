@@ -1,0 +1,31 @@
+services:
+  backend-demo:
+    build:
+      context: ./automation-platform/backend
+      dockerfile: Dockerfile
+    env_file:
+      - ./.env.demo
+    environment:
+      PORT: 3847
+      WA_AUTH_ROOT: /app/data/wa_sessions
+    volumes:
+      - wa_sessions_demo:/app/data/wa_sessions
+    ports:
+      - "13847:3847"
+    restart: unless-stopped
+
+  frontend-demo:
+    build:
+      context: ./automation-platform/frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
+    depends_on:
+      - backend-demo
+    ports:
+      - "15173:80"
+    restart: unless-stopped
+
+volumes:
+  wa_sessions_demo:
