@@ -22,3 +22,5 @@ supabase/.branches/
 supabase/.temp/
 .DS_Store
 config.bat
+.env
+.env.bak.*
