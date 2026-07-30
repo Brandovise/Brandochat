@@ -1,0 +1,68 @@
+name: repo guard
+
+# The local pre-commit hook can be skipped with --no-verify, and it lives in a
+# file that whatever compromised a machine could edit. This job is the copy that
+# actually holds: it runs on the server, on every push and pull request.
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  # A build config executes on every build, so unexplained growth is the signal.
+  # Chosen from measurement, not taste: across all 40 org repositories the largest
+  # legitimate build config is 3,061 bytes (blink-auth-manager/tailwind.config.ts),
+  # while the two observed payload variants took a config to 5,938 and 9,782 bytes.
+  # 4096 sits above every real config and below both payloads. Raise it only with
+  # the same kind of evidence, and never to silence a diff you have not read.
+  GUARD_CONFIG_MAX_BYTES: "4096"
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Need the base commit too, so the PR diff can be inspected.
+          fetch-depth: 0
+
+      # No dependency install and no build step: this job must never execute
+      # repository code, or a payload in a config file would run here with
+      # whatever secrets the workflow can see.
+      - name: Scan the whole tree
+        run: python3 scripts/guard_repo.py --all
+
+      - name: Scan the pull-request diff
+        if: github.event_name == 'pull_request'
+        run: |
+          python3 scripts/guard_repo.py \
+            --range "origin/${{ github.base_ref }}...HEAD"
+
+      - name: Check build configs did not grow
+        run: |
+          limit="${GUARD_CONFIG_MAX_BYTES}"
+          configs=$(git ls-files \
+            | grep -E '(^|/)(vite|vitest|rollup|webpack|next|nuxt|svelte|astro|tailwind|postcss)\.config\.[cm]?[jt]s$' \
+            || true)
+          if [ -z "$configs" ]; then
+            echo "no build configs tracked in this repository"
+            exit 0
+          fi
+          # Heredoc rather than a pipe: a piped while-loop runs in a subshell and
+          # the failure flag would be lost when it exits.
+          fail=0
+          while IFS= read -r f; do
+            [ -n "$f" ] || continue
+            [ -f "$f" ] || continue
+            size=$(wc -c < "$f" | tr -d ' ')
+            printf '%8s bytes  %s\n' "$size" "$f"
+            if [ "$size" -gt "$limit" ]; then
+              echo "::error file=$f::Config is $size bytes (limit $limit). A build config executes on every build — review the diff before raising this limit."
+              fail=1
+            fi
+          done <<EOF
+          $configs
+          EOF
+          exit "$fail"
