@@ -248,6 +248,7 @@ def main() -> int:
                  "scripts/incident/strip_payload.py",
                  "scripts/incident/filter_stream.py",
                  "scripts/incident/check_machine.py",
+                 "scripts/incident/remediate.py",
                  ".claude/skills/incident-sweep/SKILL.md"):
             continue
 
