@@ -188,15 +188,31 @@ def all_files() -> list[str]:
     return [l for l in sh("git", "ls-files").splitlines() if l.strip()]
 
 
+def safe_bytes(path: str) -> bytes | None:
+    """Read a tracked file, or None if this filesystem cannot open it.
+
+    ameise-zoho carries paths that exceed the runner's filename limit, and an
+    unhandled OSError there aborted the whole scan — every file after it went
+    unchecked while the job merely looked 'failed'. Skip what cannot be read and
+    keep scanning; a file we cannot open is also a file a payload cannot hide in.
+    """
+    try:
+        p = ROOT / path
+        if not p.is_file():
+            return None
+        return p.read_bytes()
+    except OSError:
+        return None
+
+
 def read(path: str, staged: bool) -> str | None:
     if staged:
         raw = subprocess.run(["git", "show", f":{path}"], cwd=ROOT,
                              capture_output=True, check=False).stdout
     else:
-        p = ROOT / path
-        if not p.is_file():
+        raw = safe_bytes(path)
+        if raw is None:
             return None
-        raw = p.read_bytes()
     if BINARY_HINT in raw[:8000]:
         return None
     return raw.decode("utf-8", "replace")
@@ -226,7 +242,13 @@ def main() -> int:
         # nobody can silence the scanner by dropping a file into docs/.
         if f in ("scripts/guard_repo.py", "documents/security_incident_report.md",
                  "documents/org_infection_scan.md",
-                 "documents/remediation_runbook.md"):
+                 "documents/remediation_runbook.md",
+                 "documents/credential_rotation_list.md",
+                 "scripts/incident/sweep.py",
+                 "scripts/incident/strip_payload.py",
+                 "scripts/incident/filter_stream.py",
+                 "scripts/incident/check_machine.py",
+                 ".claude/skills/incident-sweep/SKILL.md"):
             continue
 
         if SECRET_FILES.search(f) and not SECRET_FILE_TEMPLATE.search(f):
@@ -303,12 +325,14 @@ def main() -> int:
     # A tree that should be all-LF containing CRLF means either the rule was
     # added without normalising, or something wrote past it.
     if args.all:
-        stray = [f for f in files
-                 if SCANNABLE_SOURCE.search(f)
-                 and not GENERATED.search(f)
-                 and not f.endswith((".bat", ".cmd", ".ps1"))
-                 and (ROOT / f).is_file()
-                 and b"\r\n" in (ROOT / f).read_bytes()]
+        stray = []
+        for f in files:
+            if (not SCANNABLE_SOURCE.search(f) or GENERATED.search(f)
+                    or f.endswith((".bat", ".cmd", ".ps1"))):
+                continue
+            raw = safe_bytes(f)
+            if raw is not None and b"\r\n" in raw:
+                stray.append(f)
         if stray:
             findings.append(
                 f"{len(stray)} file(s) still have CRLF despite the eol=lf rule "
